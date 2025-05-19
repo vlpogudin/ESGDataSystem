@@ -1,0 +1,57 @@
+﻿<Window x:Class="ESG.Views.EditNewsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Редактировать новость" SizeToContent="WidthAndHeight"
+        MinHeight="500" MinWidth="450"
+        Background="#FFF5F5F5">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="15">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Label Content="Компания:" Grid.Row="0" Style="{StaticResource StyledLabel}"/>
+            <ComboBox Grid.Row="1" ItemsSource="{Binding Companies, RelativeSource={RelativeSource AncestorType=Window}}" 
+                      SelectedItem="{Binding SelectedCompany, RelativeSource={RelativeSource AncestorType=Window}}" 
+                      DisplayMemberPath="Name" Margin="0,0,0,10" Width="200" HorizontalAlignment="Left"/>
+
+            <Label Content="Заголовок:" Grid.Row="2" Style="{StaticResource StyledLabel}"/>
+            <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" Grid.Row="3" Margin="0,0,0,10" Style="{StaticResource StyledTextBox}"/>
+
+            <Label Content="Содержание:" Grid.Row="4" Style="{StaticResource StyledLabel}"/>
+            <TextBox Text="{Binding Content, UpdateSourceTrigger=PropertyChanged}" Grid.Row="5" Margin="0,0,0,10" Style="{StaticResource StyledTextBox}" 
+                     Height="100" TextWrapping="Wrap" AcceptsReturn="True"/>
+
+            <Label Content="Дата:" Grid.Row="6" Style="{StaticResource StyledLabel}"/>
+            <DatePicker SelectedDate="{Binding Date}" Grid.Row="7" Margin="0,0,0,10" Width="200" HorizontalAlignment="Left"/>
+
+            <Label Content="Источник:" Grid.Row="8" Style="{StaticResource StyledLabel}"/>
+            <TextBox Text="{Binding Source, UpdateSourceTrigger=PropertyChanged}" Grid.Row="9" Margin="0,0,0,10" Style="{StaticResource StyledTextBox}"/>
+
+            <Label Content="Категория ESG:" Grid.Row="10" Style="{StaticResource StyledLabel}"/>
+            <ComboBox Grid.Row="11" SelectedItem="{Binding EsgCategory}" Margin="0,0,0,15" Width="200" HorizontalAlignment="Left">
+                <ComboBoxItem Content="Environment"/>
+                <ComboBoxItem Content="Social"/>
+                <ComboBoxItem Content="Governance"/>
+            </ComboBox>
+
+            <StackPanel Grid.Row="12" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Сохранить" Margin="5,0" Style="{StaticResource StyledButton}" Click="Save_Click"/>
+                <Button Content="Отмена" Margin="5,0" Style="{StaticResource StyledButton}" Click="Cancel_Click"/>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Window>

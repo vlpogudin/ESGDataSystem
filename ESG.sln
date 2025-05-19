@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35806.99 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ESG", "ESG\ESG.csproj", "{0BB0263C-BEB2-48F1-A891-ACF3639A387C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0BB0263C-BEB2-48F1-A891-ACF3639A387C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0BB0263C-BEB2-48F1-A891-ACF3639A387C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0BB0263C-BEB2-48F1-A891-ACF3639A387C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0BB0263C-BEB2-48F1-A891-ACF3639A387C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8F462659-39D2-44E5-A684-3C41F8E7C887}
+	EndGlobalSection
+EndGlobal

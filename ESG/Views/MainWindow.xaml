@@ -1,0 +1,66 @@
+﻿<Window x:Class="ESG.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DataSystem"
+        MinHeight="600" MinWidth="1000"
+        Background="#FFF5F5F5">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Боковая панель -->
+        <Border Grid.Column="0" Background="#FF1C2538">
+            <StackPanel>
+                <!-- Заголовок боковой панели -->
+                <Button x:Name="HomeMenuItem" 
+                        Click="HomeMenuItem_Click"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="0"
+                        Margin="10,20,10,10"
+                        HorizontalAlignment="Center">
+                    <TextBlock Text="ESGSystem" 
+                               FontSize="24" 
+                               FontWeight="Bold" 
+                               Foreground="White" 
+                               TextAlignment="Center"/>
+                </Button>
+
+                <!-- Кнопки меню -->
+                <Button x:Name="ExportDataMenuItem" 
+                        Content="Выгрузить данные" 
+                        Click="ExportDataMenuItem_Click" 
+                        Style="{StaticResource SidebarButtonStyle}"/>
+                <Button x:Name="CompaniesMenuItem" 
+                        Content="Компании" 
+                        Click="CompaniesMenuItem_Click" 
+                        Style="{StaticResource SidebarButtonStyle}"/>
+                <Button x:Name="ReportsMenuItem" 
+                        Content="Отчеты" 
+                        Click="ReportsMenuItem_Click" 
+                        Style="{StaticResource SidebarButtonStyle}"/>
+                <Button x:Name="WebsitesMenuItem" 
+                        Content="Веб-сайты" 
+                        Click="WebsitesMenuItem_Click" 
+                        Style="{StaticResource SidebarButtonStyle}"/>
+                <Button x:Name="NewsMenuItem" 
+                        Content="Новости" 
+                        Click="NewsMenuItem_Click" 
+                        Style="{StaticResource SidebarButtonStyle}"/>
+                <Button x:Name="IndustriesMenuItem" 
+                        Content="Отрасли" 
+                        Click="IndustriesMenuItem_Click" 
+                        Style="{StaticResource SidebarButtonStyle}"/>
+                <Button x:Name="UsersMenuItem" 
+                        Content="Пользователи" 
+                        Click="UsersMenuItem_Click" 
+                        Style="{StaticResource SidebarButtonStyle}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Основной контент -->
+        <Frame x:Name="MainFrame" Grid.Column="1" NavigationUIVisibility="Hidden" Background="White"/>
+    </Grid>
+</Window>

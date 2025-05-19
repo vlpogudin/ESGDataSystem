@@ -1,0 +1,50 @@
+﻿<Window x:Class="ESG.Views.ImportCsvInstructionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Загрузка веб-сайтов из CSV" SizeToContent="WidthAndHeight"
+        MinHeight="300" MinWidth="400"
+        Background="#FFF5F5F5">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="15">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Инструкция -->
+            <TextBlock Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,10">
+                Для загрузки веб-сайтов из CSV-файла следуйте этим правилам:<LineBreak/>
+                - Файл должен быть в формате CSV с заголовками.<LineBreak/>
+                - Обязательные столбцы: "компания", "веб-сайт (оф. сайт, главная страница)".<LineBreak/>
+                - Дополнительные столбцы (опционально):<LineBreak/>
+                  1. Устойчивое развитие, Социальная отчетность, ESG<LineBreak/>
+                  2. Экология, Забота о потребителях, защита прав потребителей<LineBreak/>
+                  3. Забота о работниках, социальные программы<LineBreak/>
+                  4. Поставщикам, Закупки<LineBreak/>
+                  5. Корпоративное управление, совет директоров, высший менеджмент<LineBreak/>
+                  6. Миссия, ценности<LineBreak/>
+                  7. Этический кодекс<LineBreak/>
+                  8. Антикоррупция<LineBreak/>
+                  9. Раскрытие информации<LineBreak/>
+                - "веб-сайт" должен содержать действительный URL.<LineBreak/>
+                - "компания" должна соответствовать существующей компании в базе данных.<LineBreak/>
+                Нажмите "Выбрать файл", выберите CSV, затем "Загрузить".
+            </TextBlock>
+
+            <!-- Поле для выбора файла -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+                <TextBox x:Name="FilePathTextBox" IsReadOnly="True" Width="250" Style="{StaticResource StyledTextBox}"/>
+                <Button Content="Выбрать файл" Margin="5,0" Style="{StaticResource StyledButton}" Click="SelectFile_Click"/>
+            </StackPanel>
+
+            <!-- Кнопка загрузки -->
+            <Button Grid.Row="2" Content="Загрузить" Margin="0,0,0,10" Style="{StaticResource StyledButton}"
+                    Click="Import_Click" HorizontalAlignment="Right" Width="100"/>
+
+            <!-- Статус -->
+            <TextBlock x:Name="StatusTextBlock" Grid.Row="3" Foreground="Red"/>
+        </Grid>
+    </ScrollViewer>
+</Window>
