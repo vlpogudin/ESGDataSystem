@@ -1,10 +1,5 @@
 ﻿using ESG.Data;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows;
@@ -12,19 +7,89 @@ using ESG.Views;
 
 namespace ESG.ViewModels
 {
+    /// <summary>
+    /// Управление навигацией между страницами
+    /// </summary>
     public class MainViewModel : INotifyPropertyChanged
     {
+        #region Поля
+
+        /// <summary>
+        /// Сервис для взаимодействия с базой данных
+        /// </summary>
         private readonly DatabaseService _dbService;
+
+        /// <summary>
+        /// Текущая отображаемая система
+        /// </summary>
         private Page _currentPage;
 
+        #endregion
+
+        #region Свойства
+
+        /// <summary>
+        /// Текущая отображаемая система
+        /// </summary>
+        public Page CurrentPage
+        {
+            get => _currentPage;
+            set
+            {
+                _currentPage = value;
+                OnPropertyChanged(nameof(CurrentPage));
+            }
+        }
+
+        /// <summary>
+        /// Команда перехода на страницу компаний
+        /// </summary>
+        public ICommand NavigateToCompaniesCommand { get; }
+
+        /// <summary>
+        /// Команда перехода на страницу отчетов
+        /// </summary>
+        public ICommand NavigateToReportsCommand { get; }
+
+        /// <summary>
+        /// Команда перехода на страницу веб-сайтов
+        /// </summary>
+        public ICommand NavigateToWebsitesCommand { get; }
+
+        /// <summary>
+        /// Команда перехода на страницу новостей
+        /// </summary>
+        public ICommand NavigateToNewsCommand { get; }
+
+        /// <summary>
+        /// Команда перехода на страницу пользователей
+        /// </summary>
+        public ICommand NavigateToUsersCommand { get; }
+
+        /// <summary>
+        /// Команда перехода на страницу выгрузки данных
+        /// </summary>
+        public ICommand NavigateToExportDataCommand { get; }
+
+        /// <summary>
+        /// Команда выхода из профиля
+        /// </summary>
+        public ICommand LogoutCommand { get; }
+
+        #endregion
+
+        #region Конструкторы
+
+        /// <summary>
+        /// Инициализация VM
+        /// </summary>
         public MainViewModel()
         {
             _dbService = new DatabaseService();
-
-            // Проверка подключения
             if (!_dbService.IsConnected())
             {
-                MessageBox.Show("Не удалось подключиться к серверу. Убедитесь, что вы подключены к локальной сети компании.", "Ошибка подключения", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Не удалось подключиться к серверу. Убедитесь, что вы подключены к локальной сети компании.", 
+                    "Ошибка подключения", MessageBoxButton.OK, MessageBoxImage.Error);
                 Application.Current.Shutdown();
                 return;
             }
@@ -43,39 +108,42 @@ namespace ESG.ViewModels
             CurrentPage = new CompaniesPage();
         }
 
-        public Page CurrentPage
-        {
-            get => _currentPage;
-            set
-            {
-                _currentPage = value;
-                OnPropertyChanged(nameof(CurrentPage));
-            }
-        }
+        #endregion
 
-        public ICommand NavigateToCompaniesCommand { get; }
-        public ICommand NavigateToReportsCommand { get; }
-        public ICommand NavigateToWebsitesCommand { get; }
-        public ICommand NavigateToNewsCommand { get; }
-        public ICommand NavigateToUsersCommand { get; }
-        public ICommand NavigateToExportDataCommand { get; }
-        public ICommand LogoutCommand { get; }
+        #region Методы
 
+        /// <summary>
+        /// Переход на указанную страницу
+        /// </summary>
+        /// <param name="page"></param>
         private void NavigateTo(Page page)
         {
             CurrentPage = page;
         }
 
+        /// <summary>
+        /// Выход из профиля
+        /// </summary>
         private void Logout()
         {
-            MessageBox.Show("Выход из профиля (в разработке).");
-            Application.Current.Shutdown();
+            MessageBox.Show("Выход из профиля.");
+            Application.Current.Shutdown(); // Завершение работы приложения
         }
 
+        /// <summary>
+        /// Вызов события изменения свойства
+        /// </summary>
         public event PropertyChangedEventHandler PropertyChanged;
+
+        /// <summary>
+        /// Метод для вызова события изменения свойства
+        /// </summary>
+        /// <param name="propertyName"></param>
         protected void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+
+        #endregion
     }
 }

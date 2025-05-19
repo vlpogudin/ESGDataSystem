@@ -154,7 +154,7 @@ namespace ESG.Views
                         _viewModel.FilteredNews.Add(news);
                     }
                 }
-                _viewModel.RefreshNewsFromDatabase(); // Обновляем данные
+                _viewModel.RefreshNews(); // Обновляем данные
                 DialogResult = true;
                 Close();
             }

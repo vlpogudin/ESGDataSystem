@@ -1,11 +1,9 @@
 ﻿using ESG.Data;
 using ESG.Models;
 using ESG.Views;
-using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Input;
