@@ -1,4 +1,5 @@
-﻿using ESG.ViewModels;
+﻿using ESG.Models;
+using ESG.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +26,22 @@ namespace ESG.Views
         {
             InitializeComponent();
             DataContext = new UsersViewModel();
+        }
+
+        private void UserCheckBox_Checked(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is UsersViewModel viewModel && sender is CheckBox checkBox && checkBox.DataContext is User user)
+            {
+                viewModel.AddSelectedUser(user);
+            }
+        }
+
+        private void UserCheckBox_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is UsersViewModel viewModel && sender is CheckBox checkBox && checkBox.DataContext is User user)
+            {
+                viewModel.RemoveSelectedUser(user);
+            }
         }
     }
 }

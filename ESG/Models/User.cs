@@ -34,6 +34,11 @@ namespace ESG.Models
         /// </summary>
         private List<Permission> _permissions;
 
+        /// <summary>
+        /// Флаг выбора пользователя
+        /// </summary>
+        private bool _isSelected;
+
         #endregion
 
         #region Свойства
@@ -88,6 +93,19 @@ namespace ESG.Models
                 _roleId = value;
                 OnPropertyChanged(nameof(RoleId));
                 OnPropertyChanged(nameof(Role));
+            }
+        }
+
+        /// <summary>
+        /// Флаг выбора пользователя
+        /// </summary>
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                _isSelected = value;
+                OnPropertyChanged(nameof(IsSelected));
             }
         }
 

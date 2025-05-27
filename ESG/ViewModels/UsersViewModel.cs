@@ -18,20 +18,35 @@ namespace ESG.ViewModels
         private string _searchText;
         private ObservableCollection<User> _allUsers;
         private ObservableCollection<User> _filteredUsers;
+        private ObservableCollection<User> _displayedUsers;
         private ObservableCollection<Role> _roles;
+        private List<User> _selectedUsers;
         public static User CurrentUser { get; set; }
 
         public UsersViewModel()
         {
             _dbService = new DatabaseService();
             _allUsers = new ObservableCollection<User>(_dbService.GetUsers());
-            Users = new ObservableCollection<User>(_allUsers);
+            _filteredUsers = new ObservableCollection<User>(_allUsers);
+            _displayedUsers = new ObservableCollection<User>(_allUsers);
+            _selectedUsers = new List<User>();
+            Users = _displayedUsers;
             Roles = new ObservableCollection<Role>(_dbService.GetRoles());
 
             AddUserCommand = new RelayCommand(_ => AddUser(), _ => CanAddUser());
             EditUserCommand = new RelayCommand(_ => EditUser(), _ => CanUpdateUser());
             DeleteUserCommand = new RelayCommand(_ => DeleteUser(), _ => CanDeleteUser());
-            ClearSearchCommand = new RelayCommand(_ => SearchText = string.Empty);
+            ClearSearchCommand = new RelayCommand(param =>
+            {
+                SearchText = string.Empty;
+                _selectedUsers.Clear();
+                foreach (var user in _allUsers)
+                {
+                    user.IsSelected = false;
+                }
+                FilterUsers();
+                UpdateFilteredUsers();
+            });
 
             // Проверка прав при загрузке
             if (CurrentUser == null || !PermissionChecker.CanManageUsers())
@@ -42,6 +57,16 @@ namespace ESG.ViewModels
         }
 
         public ObservableCollection<User> Users
+        {
+            get => _displayedUsers;
+            private set
+            {
+                _displayedUsers = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public ObservableCollection<User> FilteredUsers
         {
             get => _filteredUsers;
             private set
@@ -92,12 +117,25 @@ namespace ESG.ViewModels
         {
             if (string.IsNullOrWhiteSpace(SearchText))
             {
-                Users = new ObservableCollection<User>(_allUsers);
+                FilteredUsers = new ObservableCollection<User>(_allUsers);
             }
             else
             {
-                Users = new ObservableCollection<User>(
-                    _allUsers.Where(u => u.Username.Contains(SearchText, System.StringComparison.OrdinalIgnoreCase)));
+                var filteredUsers = _allUsers.Where(u => 
+                    u.Username.ToLower().Contains(SearchText.ToLower())).ToList();
+                FilteredUsers = new ObservableCollection<User>(filteredUsers);
+            }
+        }
+
+        public void UpdateFilteredUsers()
+        {
+            if (_selectedUsers.Any())
+            {
+                Users = new ObservableCollection<User>(_selectedUsers);
+            }
+            else
+            {
+                Users = new ObservableCollection<User>(_allUsers);
             }
         }
 
@@ -156,6 +194,24 @@ namespace ESG.ViewModels
         }
 
         private bool CanDeleteUser() => CurrentUser != null && PermissionChecker.CanManageUsers() && SelectedUser != null;
+
+        public void AddSelectedUser(User user)
+        {
+            if (!_selectedUsers.Contains(user))
+            {
+                _selectedUsers.Add(user);
+                UpdateFilteredUsers();
+            }
+        }
+
+        public void RemoveSelectedUser(User user)
+        {
+            if (_selectedUsers.Contains(user))
+            {
+                _selectedUsers.Remove(user);
+                UpdateFilteredUsers();
+            }
+        }
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string propertyName = null)

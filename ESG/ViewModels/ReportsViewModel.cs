@@ -9,6 +9,7 @@ using System.Windows;
 using System.Windows.Input;
 using Microsoft.Win32;
 using ESG.Utilities;
+using System.IO;
 
 namespace ESG.ViewModels
 {
@@ -322,6 +323,11 @@ namespace ESG.ViewModels
             {
                 try
                 {
+                    // Create a folder for report files in the same directory as the CSV file
+                    string exportDir = Path.GetDirectoryName(saveFileDialog.FileName);
+                    string reportsFolder = Path.Combine(exportDir, "Reports");
+                    Directory.CreateDirectory(reportsFolder);
+
                     var csvBuilder = new StringBuilder();
                     csvBuilder.AppendLine("ID,Компания,Название отчёта,Год,Язык,Файл");
 
@@ -333,11 +339,20 @@ namespace ESG.ViewModels
                         var year = report.Year?.ToString() ?? "";
                         var language = $"\"{report.Language?.Replace("\"", "\"\"") ?? ""}\"";
                         var filePath = $"\"{report.FilePath?.Replace("\"", "\"\"") ?? ""}\"";
+
+                        // Copy report file if it exists
+                        if (!string.IsNullOrEmpty(report.FilePath) && File.Exists(report.FilePath))
+                        {
+                            string fileName = Path.GetFileName(report.FilePath);
+                            string newFilePath = Path.Combine(reportsFolder, fileName);
+                            File.Copy(report.FilePath, newFilePath, true);
+                        }
+
                         csvBuilder.AppendLine($"{id},{companyName},{title},{year},{language},{filePath}");
                     }
 
                     System.IO.File.WriteAllText(saveFileDialog.FileName, csvBuilder.ToString(), Encoding.UTF8);
-                    MessageBox.Show("Данные успешно выгружены в CSV!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show($"Данные успешно выгружены в CSV!\nФайлы отчётов скопированы в папку: {reportsFolder}", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {

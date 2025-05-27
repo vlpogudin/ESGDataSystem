@@ -38,6 +38,7 @@ namespace ESG.Models
         /// Список выбранных компаний
         /// </summary>
         private List<string> _selectedIndustries = new List<string>();
+
         #endregion
 
         #region Свойства

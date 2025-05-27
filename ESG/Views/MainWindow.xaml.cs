@@ -2,6 +2,7 @@
 using ESG.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace ESG.Views
 {
@@ -9,62 +10,52 @@ namespace ESG.Views
     {
         private readonly User _currentUser;
         private readonly string _roleName;
+        private readonly MainViewModel _viewModel;
 
         public MainWindow(User currentUser, string roleName)
         {
-            try
+            InitializeComponent();
+            _currentUser = currentUser;
+            _roleName = roleName;
+            _viewModel = new MainViewModel();
+            DataContext = _viewModel;
+
+            // Подписываемся на событие выхода
+            _viewModel.LogoutRequested += ViewModel_LogoutRequested;
+
+            UsersViewModel.CurrentUser = _currentUser;
+
+            if (MainFrame == null)
             {
-                InitializeComponent();
-                _currentUser = currentUser;
-                _roleName = roleName;
-
-                // Устанавливаем текущего пользователя в UsersViewModel
-                UsersViewModel.CurrentUser = _currentUser;
-
-                System.Diagnostics.Debug.WriteLine($"MainFrame: {MainFrame != null}");
-                System.Diagnostics.Debug.WriteLine($"ExportDataMenuItem: {ExportDataMenuItem != null}");
-
-                if (MainFrame == null)
-                {
-                    MessageBox.Show("Ошибка: MainFrame не инициализирован.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
-                MainFrame.Navigate(new GreetingPage(_currentUser, MainFrame));
-                ConfigureAccess();
+                MessageBox.Show("Ошибка: MainFrame не инициализирован.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
             }
-            catch (System.Exception ex)
-            {
-                MessageBox.Show($"Ошибка при создании MainWindow: {ex.Message}\n{ex.StackTrace}",
-                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                Application.Current?.Shutdown();
-            }
+
+            MainFrame.Navigate(new GreetingPage(_currentUser, MainFrame));
+            ConfigureAccess();
+        }
+
+        private void ViewModel_LogoutRequested()
+        {
+            PerformLogout();
         }
 
         private void ConfigureAccess()
         {
             if (_roleName == null)
             {
-                MessageBox.Show("Ошибка: Роль не определена.", 
+                MessageBox.Show("Ошибка: Роль не определена.",
                     "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
             switch (_roleName)
             {
                 case "Администратор":
-                    // Полный доступ
                     break;
-
                 case "Модератор данных":
-                    // Скрываем только "Пользователи"
-                    UsersMenuItem.Visibility = Visibility.Collapsed;
-                    break;
-
                 case "Аналитик":
-                    // Скрываем только "Пользователи"
                     UsersMenuItem.Visibility = Visibility.Collapsed;
                     break;
-
                 default:
                     MessageBox.Show($"Неизвестная роль: {_roleName}. Доступ ограничен.",
                         "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -116,6 +107,53 @@ namespace ESG.Views
         private void UsersMenuItem_Click(object sender, RoutedEventArgs e)
         {
             MainFrame.Navigate(new UsersPage());
+        }
+
+        private void LogoutButton_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.LogoutCommand.Execute(null); // Вызываем команду выхода из ViewModel
+        }
+
+        private void PerformLogout()
+        {
+            try
+            {
+                // Создаем новое окно авторизации
+                var loginWindow = new LoginWindow();
+                // Показываем окно как диалоговое
+                bool? loginResult = loginWindow.ShowDialog();
+
+                if (loginResult == true)
+                {
+                    // Успешная авторизация — создаем новое окно MainWindow
+                    var newMainWindow = new MainWindow(loginWindow.AuthenticatedUser, loginWindow.RoleName);
+                    Application.Current.MainWindow = newMainWindow;
+                    Application.Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
+                    newMainWindow.Show();
+                    // Закрываем текущее окно только после успешной авторизации
+                    Close();
+                }
+                else
+                {
+                    // Авторизация отменена — просто возвращаемся, не завершая приложение
+                    MessageBox.Show("Смена профиля отменена.",
+                        "Информация", MessageBoxButton.OK, MessageBoxImage.Information);
+                    // Не вызываем Close() и Shutdown(), чтобы остаться в текущем окне
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при выходе из профиля: {ex.Message}\n{ex.StackTrace}",
+                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                // Не завершаем приложение, чтобы пользователь мог продолжить работу
+            }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            // Отписываемся от события, чтобы избежать утечек памяти
+            _viewModel.LogoutRequested -= ViewModel_LogoutRequested;
         }
     }
 }

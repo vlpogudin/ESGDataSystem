@@ -12,7 +12,13 @@
 
         <!-- Боковая панель -->
         <Border Grid.Column="0" Background="#FF1C2538">
-            <StackPanel>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
                 <!-- Заголовок боковой панели -->
                 <Button x:Name="HomeMenuItem" 
                         Click="HomeMenuItem_Click"
@@ -29,35 +35,45 @@
                 </Button>
 
                 <!-- Кнопки меню -->
-                <Button x:Name="ExportDataMenuItem" 
-                        Content="Выгрузить данные" 
-                        Click="ExportDataMenuItem_Click" 
-                        Style="{StaticResource SidebarButtonStyle}"/>
-                <Button x:Name="CompaniesMenuItem" 
-                        Content="Компании" 
-                        Click="CompaniesMenuItem_Click" 
-                        Style="{StaticResource SidebarButtonStyle}"/>
-                <Button x:Name="ReportsMenuItem" 
-                        Content="Отчеты" 
-                        Click="ReportsMenuItem_Click" 
-                        Style="{StaticResource SidebarButtonStyle}"/>
-                <Button x:Name="WebsitesMenuItem" 
-                        Content="Веб-сайты" 
-                        Click="WebsitesMenuItem_Click" 
-                        Style="{StaticResource SidebarButtonStyle}"/>
-                <Button x:Name="NewsMenuItem" 
-                        Content="Новости" 
-                        Click="NewsMenuItem_Click" 
-                        Style="{StaticResource SidebarButtonStyle}"/>
-                <Button x:Name="IndustriesMenuItem" 
-                        Content="Отрасли" 
-                        Click="IndustriesMenuItem_Click" 
-                        Style="{StaticResource SidebarButtonStyle}"/>
-                <Button x:Name="UsersMenuItem" 
-                        Content="Пользователи" 
-                        Click="UsersMenuItem_Click" 
-                        Style="{StaticResource SidebarButtonStyle}"/>
-            </StackPanel>
+                <StackPanel Grid.Row="1">
+                    <Button x:Name="ExportDataMenuItem" 
+                            Content="Выгрузить данные" 
+                            Click="ExportDataMenuItem_Click" 
+                            Style="{StaticResource SidebarButtonStyle}"/>
+                    <Button x:Name="CompaniesMenuItem" 
+                            Content="Компании" 
+                            Click="CompaniesMenuItem_Click" 
+                            Style="{StaticResource SidebarButtonStyle}"/>
+                    <Button x:Name="ReportsMenuItem" 
+                            Content="Отчеты" 
+                            Click="ReportsMenuItem_Click" 
+                            Style="{StaticResource SidebarButtonStyle}"/>
+                    <Button x:Name="WebsitesMenuItem" 
+                            Content="Веб-сайты" 
+                            Click="WebsitesMenuItem_Click" 
+                            Style="{StaticResource SidebarButtonStyle}"/>
+                    <Button x:Name="NewsMenuItem" 
+                            Content="Новости" 
+                            Click="NewsMenuItem_Click" 
+                            Style="{StaticResource SidebarButtonStyle}"/>
+                    <Button x:Name="IndustriesMenuItem" 
+                            Content="Отрасли" 
+                            Click="IndustriesMenuItem_Click" 
+                            Style="{StaticResource SidebarButtonStyle}"/>
+                    <Button x:Name="UsersMenuItem" 
+                            Content="Пользователи" 
+                            Click="UsersMenuItem_Click" 
+                            Style="{StaticResource SidebarButtonStyle}"/>
+                </StackPanel>
+
+                <!-- Кнопка выхода -->
+                <Button Grid.Row="2" 
+                        Content="Сменить профиль" 
+                        Click="LogoutButton_Click" 
+                        Style="{StaticResource SidebarButtonStyle}"
+                        Background="#FFE53935"
+                        Margin="10,10,10,20"/>
+            </Grid>
         </Border>
 
         <!-- Основной контент -->

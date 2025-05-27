@@ -24,6 +24,8 @@ namespace ESG.ViewModels
         /// </summary>
         private Page _currentPage;
 
+        public delegate void LogoutEventHandler();
+        public event LogoutEventHandler LogoutRequested;
         #endregion
 
         #region Свойства
@@ -126,8 +128,11 @@ namespace ESG.ViewModels
         /// </summary>
         private void Logout()
         {
-            MessageBox.Show("Выход из профиля.");
-            Application.Current.Shutdown(); // Завершение работы приложения
+            if (MessageBox.Show("Вы уверены, что хотите сменить профиль?",
+                "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            {
+                LogoutRequested?.Invoke(); // Вызываем событие выхода
+            }
         }
 
         /// <summary>

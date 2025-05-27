@@ -64,21 +64,46 @@
             </StackPanel>
         </Border>
 
-        <!-- Панель поиска (аналогично CompaniesPage) -->
-        <Border Grid.Row="2" Background="White" CornerRadius="6" 
-                Padding="12" Margin="0,0,0,20"
-                Effect="{StaticResource CardShadow}">
-            <StackPanel Orientation="Horizontal">
-                <TextBox Width="300" Margin="0,0,10,0"
-                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                         materialDesign:HintAssist.Hint="Поиск по логину пользователя"
-                         Style="{StaticResource StyledTextBox}"/>
-
-                <Button Content="Очистить" 
-                        Command="{Binding ClearSearchCommand}"
-                        Style="{StaticResource SecondaryButton}"/>
-            </StackPanel>
-        </Border>
+        <!-- Панель поиска -->
+        <Expander Grid.Row="2" Header="Фильтр по пользователям" IsExpanded="False" Margin="0,0,0,20">
+            <Border Background="White" CornerRadius="6" 
+                    Padding="12" Margin="0"
+                    Effect="{StaticResource CardShadow}">
+                <StackPanel Orientation="Vertical">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBox Width="450" Margin="0,0,10,5"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="Поиск по логину пользователя"
+                                 Style="{StaticResource StyledTextBox}"/>
+                        <Button Command="{Binding ClearSearchCommand}" 
+                                Content="Очистить выбор" 
+                                Style="{StaticResource SecondaryButton}" 
+                                Width="150" 
+                                Margin="0,0,0,5"/>
+                    </StackPanel>
+                    <ScrollViewer MaxHeight="100" Width="450" Background="#F9F9F9" BorderBrush="#DDD" BorderThickness="1"
+                                  HorizontalAlignment="Left" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding FilteredUsers}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Username}" 
+                                              Height="25"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              Checked="UserCheckBox_Checked"
+                                              Unchecked="UserCheckBox_Unchecked"
+                                              HorizontalAlignment="Left"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Vertical" HorizontalAlignment="Left"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+        </Expander>
 
         <!-- Таблица с пользователями -->
         <Border Grid.Row="3" Background="White" CornerRadius="6"
