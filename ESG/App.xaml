@@ -363,5 +363,9 @@
         <local:RoleIdToRoleConverter x:Key="RoleIdToRoleConverter"/>
         <converters:TextToVisibilityConverter x:Key="TextToVisibilityConverter" xmlns:converters="clr-namespace:ESG.Converters"/>
 
+        <Style TargetType="Window">
+            <!-- <Setter Property="WindowStartupLocation" Value="CenterScreen"/> -->
+        </Style>
+
     </Application.Resources>
 </Application>

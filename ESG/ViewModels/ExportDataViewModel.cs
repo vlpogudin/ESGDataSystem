@@ -7,6 +7,13 @@ using System.Windows.Input;
 using System.Windows;
 using Microsoft.Win32;
 using ESG.Data;
+using OfficeOpenXml;
+using System.Drawing;
+using OfficeOpenXml.Style;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace ESG.ViewModels
 {
@@ -402,9 +409,68 @@ namespace ESG.ViewModels
         public ICommand ExportToCsvCommand { get; }
 
         /// <summary>
+        /// Команда экспорта данных в Excel
+        /// </summary>
+        public ICommand ExportToExcelCommand { get; }
+
+        /// <summary>
         /// Команда очистки всех фильтров
         /// </summary>
         public ICommand ClearFiltersCommand { get; }
+
+        #endregion
+
+        #region New Properties
+
+        private bool _isExporting;
+        public bool IsExporting
+        {
+            get => _isExporting;
+            set
+            {
+                _isExporting = value;
+                OnPropertyChanged(nameof(IsExporting));
+            }
+        }
+
+        private string _exportProgressMessage;
+        public string ExportProgressMessage
+        {
+            get => _exportProgressMessage;
+            set
+            {
+                _exportProgressMessage = value;
+                OnPropertyChanged(nameof(ExportProgressMessage));
+            }
+        }
+
+        private double _exportProgress;
+        public double ExportProgress
+        {
+            get => _exportProgress;
+            set
+            {
+                _exportProgress = value;
+                OnPropertyChanged(nameof(ExportProgress));
+            }
+        }
+
+        private bool _isIndeterminate;
+        public bool IsIndeterminate
+        {
+            get => _isIndeterminate;
+            set
+            {
+                _isIndeterminate = value;
+                OnPropertyChanged(nameof(IsIndeterminate));
+            }
+        }
+
+        #endregion
+
+        #region New Commands
+
+        public ICommand ExportToPdfCommand { get; }
 
         #endregion
 
@@ -416,6 +482,9 @@ namespace ESG.ViewModels
         public ExportDataViewModel()
         {
             _dbService = new DatabaseService(); // Инициализация сервиса базы данных
+
+            // Set EPPlus license context
+            OfficeOpenXml.ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
 
             // Загрузка отраслей из базы данных
             Industries = new ObservableCollection<string>(_dbService.GetIndustries().Select(i => i.IndustryName));
@@ -467,7 +536,9 @@ namespace ESG.ViewModels
 
             FilteredSummaries = new ObservableCollection<CompanySummary>();
             ExportToCsvCommand = new RelayCommand(ExportToCsv);
+            ExportToExcelCommand = new RelayCommand(ExportToExcel);
             ClearFiltersCommand = new RelayCommand(ClearFilters);
+            ExportToPdfCommand = new RelayCommand(ExportToPdf);
 
             // Инициализация таблицы всеми данными
             UpdateFilteredSummaries();
@@ -602,6 +673,7 @@ namespace ESG.ViewModels
             // Список идентификаторов компаний
             List<int>? companyIds = SelectedCompanies.Any() ? SelectedCompanies.Select(c => c.CompanyId).ToList() : null;
             var summaries = _dbService.GetCompanySummary(selectedIndustry, companyIds, StartYear, EndYear);
+
             // Фильтрация по отчётам и новостям
             if (SelectedCompanies.Any())
             {
@@ -610,45 +682,58 @@ namespace ESG.ViewModels
                     .Where(s => selectedCompanyIds.Contains(s.CompanyId))
                     .ToList();
 
-                // Обновление отчётов и новостей для выбранных компаний
-                var allReports = new List<string>();
-                var allNews = new List<string>();
+                // Создаем словарь для хранения отчетов по компаниям
+                var reportsByCompany = new Dictionary<int, List<string>>();
+                var newsByCompany = new Dictionary<int, List<string>>();
+
+                // Заполняем словари данными для каждой компании
                 foreach (var companyId in selectedCompanyIds)
                 {
                     var reportsForCompany = _dbService.GetReports(null, null, companyId, null)
                         .Select(r => r.Title)
                         .ToList();
-                    allReports.AddRange(reportsForCompany);
+                    reportsByCompany[companyId] = reportsForCompany;
 
                     var newsForCompany = _dbService.GetNews(null, null, companyId, null)
                         .Select(n => n.Title)
                         .ToList();
-                    allNews.AddRange(newsForCompany);
+                    newsByCompany[companyId] = newsForCompany;
                 }
-                Reports = new ObservableCollection<string>(allReports.Distinct());
-                News = new ObservableCollection<string>(allNews.Distinct());
+
+                // Обновляем коллекции Reports и News только для выбранных компаний
+                Reports = new ObservableCollection<string>(reportsByCompany.Values.SelectMany(r => r).Distinct());
+                News = new ObservableCollection<string>(newsByCompany.Values.SelectMany(n => n).Distinct());
+
+                // Фильтруем сводки по выбранным отчетам
+                if (SelectedReports.Any())
+                {
+                    summaries = summaries
+                        .Where(s => reportsByCompany.ContainsKey(s.CompanyId) && 
+                                   reportsByCompany[s.CompanyId].Any(r => SelectedReports.Contains(r)))
+                        .ToList();
+                }
+
+                // Фильтруем сводки по выбранным новостям
+                if (SelectedNews.Any())
+                {
+                    summaries = summaries
+                        .Where(s => newsByCompany.ContainsKey(s.CompanyId) && 
+                                   newsByCompany[s.CompanyId].Any(n => SelectedNews.Contains(n)))
+                        .ToList();
+                }
+
                 UpdateFilteredReports();
                 UpdateFilteredNews();
-                if (SelectedReports.Any()) // Фильтрация сводок по выбранным отчётам
-                {
-                    summaries = summaries
-                        .Where(s => SelectedReports.Any(sr => s.ReportInfo?.Contains(sr, StringComparison.OrdinalIgnoreCase) == true))
-                        .ToList();
-                }
-                if (SelectedNews.Any()) // Фильтрация сводок по выбранным новостям
-                {
-                    summaries = summaries
-                        .Where(s => SelectedNews.Any(sn => s.NewsTitles?.Contains(sn, StringComparison.OrdinalIgnoreCase) == true))
-                        .ToList();
-                }
             }
-            else // Если компании не выбраны, загружаем все отчёты и новости
+            else
             {
-                Reports = new ObservableCollection<string>(_dbService.GetReports(null, null, null, null).Select(r => r.Title));
-                News = new ObservableCollection<string>(_dbService.GetNews(null, null, null, null).Select(n => n.Title));
+                // Если компании не выбраны, очищаем коллекции отчетов и новостей
+                Reports = new ObservableCollection<string>();
+                News = new ObservableCollection<string>();
                 UpdateFilteredReports();
                 UpdateFilteredNews();
             }
+
             FilteredSummaries = new ObservableCollection<CompanySummary>(summaries ?? new List<CompanySummary>());
         }
 
@@ -727,6 +812,358 @@ namespace ESG.ViewModels
         }
 
         /// <summary>
+        /// Экспорт данных в Excel файл
+        /// </summary>
+        /// <param name="parameter"></param>
+        private void ExportToExcel(object parameter)
+        {
+            var saveFileDialog = new SaveFileDialog
+            {
+                Filter = "Excel files (*.xlsx)|*.xlsx",
+                FileName = $"ESG_Summary_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
+                DefaultExt = "xlsx"
+            };
+
+            if (saveFileDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    // Создаем основную папку выгрузки
+                    string exportDir = Path.GetDirectoryName(saveFileDialog.FileName);
+                    string exportFolder = Path.Combine(exportDir, $"Выгрузка_{DateTime.Now:yyyyMMdd_HHmmss}");
+                    Directory.CreateDirectory(exportFolder);
+
+                    // Создаем папку для отчетов внутри папки выгрузки
+                    string reportsFolder = Path.Combine(exportFolder, "Reports");
+                    Directory.CreateDirectory(reportsFolder);
+
+                    // Перемещаем Excel файл в папку выгрузки
+                    string excelFilePath = Path.Combine(exportFolder, Path.GetFileName(saveFileDialog.FileName));
+
+                    using (var package = new ExcelPackage())
+                    {
+                        // Основной лист с данными
+                        var worksheet = package.Workbook.Worksheets.Add("Основные данные");
+                        
+                        // Заголовки
+                        worksheet.Cells[1, 1].Value = "Компания";
+                        worksheet.Cells[1, 2].Value = "Отрасли";
+                        worksheet.Cells[1, 3].Value = "Отчеты";
+                        worksheet.Cells[1, 4].Value = "Информация об отчетах";
+                        worksheet.Cells[1, 5].Value = "Новости";
+                        worksheet.Cells[1, 6].Value = "Информация о новостях";
+                        worksheet.Cells[1, 7].Value = "Веб-сайты";
+                        worksheet.Cells[1, 8].Value = "Информация о веб-сайтах";
+                        worksheet.Cells[1, 9].Value = "Период с";
+                        worksheet.Cells[1, 10].Value = "Период по";
+
+                        // Стилизация заголовков
+                        using (var range = worksheet.Cells[1, 1, 1, 10])
+                        {
+                            range.Style.Font.Bold = true;
+                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                            range.Style.Fill.BackgroundColor.SetColor(Color.LightBlue);
+                            range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                        }
+
+                        // Заполнение данных
+                        int row = 2;
+                        foreach (var summary in FilteredSummaries)
+                        {
+                            worksheet.Cells[row, 1].Value = summary.CompanyName;
+                            worksheet.Cells[row, 2].Value = string.Join(", ", summary.Industries);
+                            worksheet.Cells[row, 3].Value = summary.ReportFiles;
+                            worksheet.Cells[row, 4].Value = summary.ReportInfo;
+                            worksheet.Cells[row, 5].Value = summary.NewsTitles;
+                            worksheet.Cells[row, 6].Value = summary.NewsInfo;
+                            worksheet.Cells[row, 7].Value = summary.WebsiteUrls;
+                            worksheet.Cells[row, 8].Value = summary.WebsiteInfo;
+                            worksheet.Cells[row, 9].Value = StartYear?.ToString() ?? "N/A";
+                            worksheet.Cells[row, 10].Value = EndYear?.ToString() ?? "N/A";
+
+                            // Добавляем границы для каждой строки
+                            using (var range = worksheet.Cells[row, 1, row, 10])
+                            {
+                                range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                            }
+                            row++;
+                        }
+
+                        // Автоматическая ширина столбцов
+                        worksheet.Cells.AutoFitColumns();
+
+                        // Лист с отчетами
+                        var reportsSheet = package.Workbook.Worksheets.Add("Отчеты");
+                        reportsSheet.Cells[1, 1].Value = "Компания";
+                        reportsSheet.Cells[1, 2].Value = "Название отчета";
+                        reportsSheet.Cells[1, 3].Value = "Год";
+                        reportsSheet.Cells[1, 4].Value = "Язык";
+                        reportsSheet.Cells[1, 5].Value = "Путь к файлу";
+
+                        int reportRow = 2;
+                        foreach (var summary in FilteredSummaries)
+                        {
+                            // Получаем отчеты только для текущей компании
+                            var companyReports = _dbService.GetReports(null, null, summary.CompanyId, null)
+                                .Where(r => r.CompanyId == summary.CompanyId)
+                                .ToList();
+
+                            if (companyReports.Any())
+                            {
+                                // Создаем папку для компании только если у нее есть отчеты
+                                string companyFolder = Path.Combine(reportsFolder, summary.CompanyName);
+                                Directory.CreateDirectory(companyFolder);
+
+                                foreach (var report in companyReports)
+                                {
+                                    reportsSheet.Cells[reportRow, 1].Value = summary.CompanyName;
+                                    reportsSheet.Cells[reportRow, 2].Value = report.Title;
+                                    reportsSheet.Cells[reportRow, 3].Value = report.Year?.ToString() ?? "N/A";
+                                    reportsSheet.Cells[reportRow, 4].Value = report.Language;
+                                    reportsSheet.Cells[reportRow, 5].Value = report.FilePath;
+
+                                    // Копируем файл отчета в папку компании с оригинальным именем
+                                    if (!string.IsNullOrEmpty(report.FilePath) && File.Exists(report.FilePath))
+                                    {
+                                        string fileName = Path.GetFileName(report.FilePath);
+                                        string destPath = Path.Combine(companyFolder, fileName);
+                                        File.Copy(report.FilePath, destPath, true);
+                                    }
+
+                                    reportRow++;
+                                }
+                            }
+                        }
+
+                        // Стилизация листа отчетов
+                        using (var range = reportsSheet.Cells[1, 1, 1, 5])
+                        {
+                            range.Style.Font.Bold = true;
+                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                            range.Style.Fill.BackgroundColor.SetColor(Color.LightBlue);
+                            range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                        }
+
+                        // Добавляем границы для всех строк в листе отчетов
+                        for (int i = 2; i < reportRow; i++)
+                        {
+                            using (var range = reportsSheet.Cells[i, 1, i, 5])
+                            {
+                                range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                            }
+                        }
+
+                        // Лист с отраслями
+                        var industriesSheet = package.Workbook.Worksheets.Add("Отрасли");
+                        industriesSheet.Cells[1, 1].Value = "Отрасль";
+                        industriesSheet.Cells[1, 2].Value = "Количество компаний";
+                        
+                        var industries = FilteredSummaries
+                            .SelectMany(s => s.Industries?.Split(", ") ?? new string[] { })
+                            .GroupBy(i => i)
+                            .Select(g => new { Industry = g.Key, Count = g.Count() })
+                            .OrderByDescending(x => x.Count)
+                            .ToList();
+
+                        int industryRow = 2;
+                        foreach (var industry in industries)
+                        {
+                            industriesSheet.Cells[industryRow, 1].Value = industry.Industry;
+                            industriesSheet.Cells[industryRow, 2].Value = industry.Count;
+
+                            // Добавляем границы для каждой строки
+                            using (var range = industriesSheet.Cells[industryRow, 1, industryRow, 2])
+                            {
+                                range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                            }
+                            industryRow++;
+                        }
+
+                        // Стилизация листа отраслей
+                        using (var range = industriesSheet.Cells[1, 1, 1, 2])
+                        {
+                            range.Style.Font.Bold = true;
+                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                            range.Style.Fill.BackgroundColor.SetColor(Color.LightGreen);
+                            range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                        }
+
+                        // Лист с веб-сайтами
+                        var websitesSheet = package.Workbook.Worksheets.Add("Веб-сайты");
+                        websitesSheet.Cells[1, 1].Value = "Компания";
+                        websitesSheet.Cells[1, 2].Value = "URL";
+                        websitesSheet.Cells[1, 3].Value = "Описание";
+
+                        int websiteRow = 2;
+                        foreach (var summary in FilteredSummaries)
+                        {
+                            if (!string.IsNullOrEmpty(summary.WebsiteUrls))
+                            {
+                                var urls = summary.WebsiteUrls.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries);
+                                var infos = summary.WebsiteInfo?.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries) ?? new string[0];
+
+                                for (int i = 0; i < urls.Length; i++)
+                                {
+                                    websitesSheet.Cells[websiteRow, 1].Value = summary.CompanyName;
+                                    websitesSheet.Cells[websiteRow, 2].Value = urls[i];
+                                    websitesSheet.Cells[websiteRow, 3].Value = i < infos.Length ? infos[i] : "";
+
+                                    // Добавляем границы для каждой строки
+                                    using (var range = websitesSheet.Cells[websiteRow, 1, websiteRow, 3])
+                                    {
+                                        range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                                        range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                                        range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                                        range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                                    }
+                                    websiteRow++;
+                                }
+                            }
+                        }
+
+                        // Стилизация листа веб-сайтов
+                        using (var range = websitesSheet.Cells[1, 1, 1, 3])
+                        {
+                            range.Style.Font.Bold = true;
+                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                            range.Style.Fill.BackgroundColor.SetColor(Color.LightYellow);
+                            range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                        }
+
+                        // Лист с новостями
+                        var newsSheet = package.Workbook.Worksheets.Add("Новости");
+                        newsSheet.Cells[1, 1].Value = "Компания";
+                        newsSheet.Cells[1, 2].Value = "Заголовок";
+                        newsSheet.Cells[1, 3].Value = "Информация";
+
+                        int newsRow = 2;
+                        foreach (var summary in FilteredSummaries)
+                        {
+                            if (!string.IsNullOrEmpty(summary.NewsTitles))
+                            {
+                                var titles = summary.NewsTitles.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries);
+                                var infos = summary.NewsInfo?.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries) ?? new string[0];
+
+                                for (int i = 0; i < titles.Length; i++)
+                                {
+                                    newsSheet.Cells[newsRow, 1].Value = summary.CompanyName;
+                                    newsSheet.Cells[newsRow, 2].Value = titles[i];
+                                    newsSheet.Cells[newsRow, 3].Value = i < infos.Length ? infos[i] : "";
+
+                                    // Добавляем границы для каждой строки
+                                    using (var range = newsSheet.Cells[newsRow, 1, newsRow, 3])
+                                    {
+                                        range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                                        range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                                        range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                                        range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                                    }
+                                    newsRow++;
+                                }
+                            }
+                        }
+
+                        // Стилизация листа новостей
+                        using (var range = newsSheet.Cells[1, 1, 1, 3])
+                        {
+                            range.Style.Font.Bold = true;
+                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                            range.Style.Fill.BackgroundColor.SetColor(Color.LightPink);
+                            range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                        }
+
+                        // Сводный лист
+                        var summarySheet = package.Workbook.Worksheets.Add("Сводная информация");
+                        
+                        // Заголовок сводки
+                        summarySheet.Cells[1, 1].Value = "Сводная информация по ESG данным";
+                        summarySheet.Cells[1, 1, 1, 2].Merge = true;
+                        using (var range = summarySheet.Cells[1, 1, 1, 2])
+                        {
+                            range.Style.Font.Bold = true;
+                            range.Style.Font.Size = 14;
+                            range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                            range.Style.Fill.BackgroundColor.SetColor(Color.LightBlue);
+                        }
+
+                        // Статистика
+                        summarySheet.Cells[3, 1].Value = "Всего компаний:";
+                        summarySheet.Cells[3, 2].Value = FilteredSummaries.Count;
+                        summarySheet.Cells[4, 1].Value = "Период:";
+                        summarySheet.Cells[4, 2].Value = $"{StartYear?.ToString() ?? "N/A"} - {EndYear?.ToString() ?? "N/A"}";
+                        summarySheet.Cells[5, 1].Value = "Всего отраслей:";
+                        summarySheet.Cells[5, 2].Value = SelectedIndustries.Count;
+                        summarySheet.Cells[6, 1].Value = "Всего веб-сайтов:";
+                        summarySheet.Cells[6, 2].Value = FilteredSummaries.Sum(s => s.WebsiteUrls?.Split(',').Length ?? 0);
+                        summarySheet.Cells[7, 1].Value = "Всего новостей:";
+                        summarySheet.Cells[7, 2].Value = FilteredSummaries.Sum(s => s.NewsTitles?.Split(',').Length ?? 0);
+                        summarySheet.Cells[8, 1].Value = "Всего отчетов:";
+                        summarySheet.Cells[8, 2].Value = FilteredSummaries.Sum(s => 
+                            _dbService.GetReports(null, null, s.CompanyId, null)
+                                .Count(r => r.CompanyId == s.CompanyId));
+
+                        // Стилизация статистики
+                        using (var range = summarySheet.Cells[3, 1, 8, 2])
+                        {
+                            range.Style.Font.Bold = true;
+                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                            range.Style.Fill.BackgroundColor.SetColor(Color.White);
+                        }
+
+                        // Автоматическая ширина столбцов для всех листов
+                        foreach (var sheet in package.Workbook.Worksheets)
+                        {
+                            sheet.Cells.AutoFitColumns();
+                        }
+
+                        // Сохранение файла в папку выгрузки
+                        package.SaveAs(new FileInfo(excelFilePath));
+                    }
+
+                    MessageBox.Show($"Данные успешно выгружены!\nExcel файл и отчеты находятся в папке: {exportFolder}", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка при выгрузке данных: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        /// <summary>
         /// Экранирование полей для CSV
         /// </summary>
         /// <param name="field"></param>
@@ -735,6 +1172,103 @@ namespace ESG.ViewModels
         {
             if (string.IsNullOrEmpty(field)) return "N/A";
             return $"\"{field.Replace("\"", "\"\"")}\"";
+        }
+
+        /// <summary>
+        /// Экспорт данных в PDF файл
+        /// </summary>
+        private void ExportToPdf(object parameter)
+        {
+            if (FilteredSummaries == null || FilteredSummaries.Count == 0)
+            {
+                MessageBox.Show("Нет данных для выгрузки.", "Информация", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var saveFileDialog = new SaveFileDialog
+            {
+                Filter = "PDF files (*.pdf)|*.pdf",
+                FileName = $"ESG_Summary_{DateTime.Now:yyyyMMdd_HHmmss}.pdf",
+                DefaultExt = "pdf"
+            };
+
+            if (saveFileDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    // Register encoding provider
+                    System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
+                    // Create base font with Unicode support
+                    string fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
+                    BaseFont baseFont = BaseFont.CreateFont(fontPath, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+
+                    using (FileStream fs = new FileStream(saveFileDialog.FileName, FileMode.Create))
+                    {
+                        Document document = new Document(PageSize.A4.Rotate(), 25, 25, 30, 30);
+                        PdfWriter writer = PdfWriter.GetInstance(document, fs);
+                        
+                        document.Open();
+
+                        // Add title
+                        iTextSharp.text.Font titleFont = new iTextSharp.text.Font(baseFont, 16f, iTextSharp.text.Font.BOLD);
+                        Paragraph title = new Paragraph("Сводка ESG данных", titleFont);
+                        title.Alignment = Element.ALIGN_CENTER;
+                        title.SpacingAfter = 20f;
+                        document.Add(title);
+
+                        // Create table
+                        PdfPTable table = new PdfPTable(8); // 8 columns
+                        table.WidthPercentage = 100;
+
+                        // Add headers
+                        iTextSharp.text.Font headerFont = new iTextSharp.text.Font(baseFont, 10f, iTextSharp.text.Font.BOLD);
+                        string[] headers = { "Компания", "Отрасли", "Отчеты", "Информация об отчетах", "Новости", "Информация о новостях", "Веб-сайты", "Информация о веб-сайтах" };
+                        foreach (string header in headers)
+                        {
+                            PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
+                            cell.BackgroundColor = BaseColor.LIGHT_GRAY;
+                            cell.Padding = 5f;
+                            table.AddCell(cell);
+                        }
+
+                        // Add data
+                        iTextSharp.text.Font dataFont = new iTextSharp.text.Font(baseFont, 9f);
+                        foreach (var summary in FilteredSummaries)
+                        {
+                            // Format URLs to remove semicolons and extra spaces
+                            string formattedUrls = summary.WebsiteUrls?.Replace(" ; ", "\n")?.Replace(";", "")?.Trim() ?? "N/A";
+                            string formattedInfo = summary.WebsiteInfo?.Replace(" ; ", "\n")?.Replace(";", "")?.Trim() ?? "N/A";
+
+                            // Create cells with proper encoding
+                            table.AddCell(new PdfPCell(new Phrase(summary.CompanyName ?? "N/A", dataFont)) { Padding = 5f });
+                            table.AddCell(new PdfPCell(new Phrase(summary.Industries ?? "N/A", dataFont)) { Padding = 5f });
+                            table.AddCell(new PdfPCell(new Phrase(summary.ReportFiles ?? "N/A", dataFont)) { Padding = 5f });
+                            table.AddCell(new PdfPCell(new Phrase(summary.ReportInfo ?? "N/A", dataFont)) { Padding = 5f });
+                            table.AddCell(new PdfPCell(new Phrase(summary.NewsTitles ?? "N/A", dataFont)) { Padding = 5f });
+                            table.AddCell(new PdfPCell(new Phrase(summary.NewsInfo ?? "N/A", dataFont)) { Padding = 5f });
+                            table.AddCell(new PdfPCell(new Phrase(formattedUrls, dataFont)) { Padding = 5f });
+                            table.AddCell(new PdfPCell(new Phrase(formattedInfo, dataFont)) { Padding = 5f });
+                        }
+
+                        document.Add(table);
+
+                        // Add footer with date
+                        iTextSharp.text.Font footerFont = new iTextSharp.text.Font(baseFont, 8f);
+                        Paragraph footer = new Paragraph($"Создано: {DateTime.Now:yyyy-MM-dd HH:mm:ss}", footerFont);
+                        footer.Alignment = Element.ALIGN_RIGHT;
+                        document.Add(footer);
+
+                        document.Close();
+                    }
+
+                    MessageBox.Show($"Данные успешно выгружены в PDF файл: {saveFileDialog.FileName}", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка при выгрузке данных в PDF: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
         }
 
         /// <summary>

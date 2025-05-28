@@ -148,12 +148,15 @@
         <!-- Таблица с данными -->
         <Border Grid.Row="2" Background="White" CornerRadius="6"
                 Effect="{StaticResource CardShadow}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                 <DataGrid ItemsSource="{Binding FilteredSummaries}" AutoGenerateColumns="False" 
                           IsReadOnly="True" Style="{StaticResource StyledDataGrid}"
                           HeadersVisibility="Column" HorizontalGridLinesBrush="#EEE"
                           VerticalGridLinesBrush="#EEE" BorderThickness="0"
-                          RowHeight="38" ColumnHeaderHeight="42">
+                          RowHeight="38" ColumnHeaderHeight="42"
+                          ScrollViewer.CanContentScroll="True"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Компания" Binding="{Binding CompanyName}" Width="200"
                                             ElementStyle="{StaticResource DataGridCellStyle}"/>
@@ -176,16 +179,47 @@
             </ScrollViewer>
         </Border>
 
-        <!-- Кнопка выгрузки -->
-        <Button Grid.Row="3" Margin="10" 
-                Command="{Binding ExportToCsvCommand}" 
-                Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <materialDesign:PackIcon Kind="Download" Width="18" Height="18" Margin="0,0,8,0"
-                                       VerticalAlignment="Center"/>
-                <TextBlock Text="Выгрузить в CSV" FontSize="14" Foreground="White"
-                         VerticalAlignment="Center" Margin="0,1,0,0"/>
-            </StackPanel>
-        </Button>
+        <!-- Кнопки выгрузки -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Command="{Binding ExportToCsvCommand}" Style="{StaticResource PrimaryButton}" Margin="5">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <materialDesign:PackIcon Kind="Download" Width="18" Height="18" Margin="0,0,8,0"
+                                           VerticalAlignment="Center"/>
+                    <TextBlock Text="Выгрузить в CSV" FontSize="14" Foreground="White"
+                             VerticalAlignment="Center" Margin="0,1,0,0"/>
+                </StackPanel>
+            </Button>
+            <Button Command="{Binding ExportToExcelCommand}" Style="{StaticResource PrimaryButton}" Margin="5">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <materialDesign:PackIcon Kind="Download" Width="18" Height="18" Margin="0,0,8,0"
+                                           VerticalAlignment="Center"/>
+                    <TextBlock Text="Выгрузить в Excel" FontSize="14" Foreground="White"
+                             VerticalAlignment="Center" Margin="0,1,0,0"/>
+                </StackPanel>
+            </Button>
+            <Button Command="{Binding ExportToPdfCommand}" Style="{StaticResource PrimaryButton}" Margin="5">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <materialDesign:PackIcon Kind="Download" Width="18" Height="18" Margin="0,0,8,0"
+                                           VerticalAlignment="Center"/>
+                    <TextBlock Text="Выгрузить в PDF" FontSize="14" Foreground="White"
+                             VerticalAlignment="Center" Margin="0,1,0,0"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
+
+        <!-- Progress Dialog -->
+        <materialDesign:DialogHost Grid.Row="0" Grid.RowSpan="4" Identifier="ProgressDialog" 
+                                  IsOpen="{Binding IsExporting}">
+            <materialDesign:DialogHost.DialogContent>
+                <StackPanel Margin="20">
+                    <TextBlock Text="{Binding ExportProgressMessage}" 
+                             HorizontalAlignment="Center" Margin="0,0,0,20"/>
+                    <ProgressBar 
+                               Value="{Binding ExportProgress}"
+                               IsIndeterminate="{Binding IsIndeterminate}"
+                               Height="50" Width="200"/>
+                </StackPanel>
+            </materialDesign:DialogHost.DialogContent>
+        </materialDesign:DialogHost>
     </Grid>
 </Page>
