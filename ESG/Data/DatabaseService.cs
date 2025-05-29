@@ -156,17 +156,34 @@ namespace ESG.Data
             using (var connection = new NpgsqlConnection(_connectionString))
             {
                 connection.Open();
-                using (var command = new NpgsqlCommand(
-                    "INSERT INTO Companies (name, country, is_selected) " +
-                    "VALUES (@name, @country, @is_selected) RETURNING company_id", connection))
+                using (var transaction = connection.BeginTransaction())
                 {
-                    command.Parameters.AddWithValue("name", company.Name);
-                    command.Parameters.AddWithValue("country", (object)company.Country ?? DBNull.Value);
-                    command.Parameters.AddWithValue("is_selected", company.IsSelected);
-                    company.CompanyId = (int)command.ExecuteScalar();
+                    try
+                    {
+                        using (var command = new NpgsqlCommand(
+                            "INSERT INTO Companies (name, country, is_selected) VALUES (@name, @country, @is_selected) RETURNING company_id",
+                            connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("name", company.Name);
+                            command.Parameters.AddWithValue("country", (object)company.Country ?? DBNull.Value);
+                            command.Parameters.AddWithValue("is_selected", company.IsSelected);
+                            company.CompanyId = (int)command.ExecuteScalar();
+                        }
+
+                        UpdateCompanyIndustries(company.CompanyId, company.SelectedIndustries, connection, transaction);
+
+                        // Запись в журнал изменений
+                        AddChangeLog("Companies", company.CompanyId, "INSERT", company.Name, null, null);
+
+                        transaction.Commit();
+                        return GetCompanyById(company.CompanyId);
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
                 }
-                UpdateCompanyIndustries(company.CompanyId, company.SelectedIndustries);
-                return GetCompanyById(company.CompanyId);
             }
         }
 
@@ -179,17 +196,45 @@ namespace ESG.Data
             using (var connection = new NpgsqlConnection(_connectionString))
             {
                 connection.Open();
-                using (var command = new NpgsqlCommand(
-                    "UPDATE Companies SET name = @name, country = @country, is_selected = @is_selected " +
-                    "WHERE company_id = @company_id", connection))
+                using (var transaction = connection.BeginTransaction())
                 {
-                    command.Parameters.AddWithValue("company_id", company.CompanyId);
-                    command.Parameters.AddWithValue("name", company.Name);
-                    command.Parameters.AddWithValue("country", (object)company.Country ?? DBNull.Value);
-                    command.Parameters.AddWithValue("is_selected", company.IsSelected);
-                    command.ExecuteNonQuery();
+                    try
+                    {
+                        // Получаем старые значения
+                        var oldCompany = GetCompanyById(company.CompanyId);
+                        if (oldCompany != null)
+                        {
+                            // Записываем изменения в журнал
+                            if (oldCompany.Name != company.Name)
+                                AddChangeLog("Companies", company.CompanyId, "UPDATE", oldCompany.Name, company.Name, "name");
+                                
+                            if (oldCompany.Country != company.Country)
+                                AddChangeLog("Companies", company.CompanyId, "UPDATE", oldCompany.Country, company.Country, "country");
+                                
+                            if (oldCompany.IsSelected != company.IsSelected)
+                                AddChangeLog("Companies", company.CompanyId, "UPDATE", oldCompany.IsSelected.ToString(), company.IsSelected.ToString(), "is_selected");
+                        }
+
+                        using (var command = new NpgsqlCommand(
+                            "UPDATE Companies SET name = @name, country = @country, is_selected = @is_selected " +
+                            "WHERE company_id = @company_id", connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("company_id", company.CompanyId);
+                            command.Parameters.AddWithValue("name", company.Name);
+                            command.Parameters.AddWithValue("country", (object)company.Country ?? DBNull.Value);
+                            command.Parameters.AddWithValue("is_selected", company.IsSelected);
+                            command.ExecuteNonQuery();
+                        }
+
+                        UpdateCompanyIndustries(company.CompanyId, company.SelectedIndustries, connection, transaction);
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
                 }
-                UpdateCompanyIndustries(company.CompanyId, company.SelectedIndustries);
             }
         }
 
@@ -202,10 +247,32 @@ namespace ESG.Data
             using (var connection = new NpgsqlConnection(_connectionString))
             {
                 connection.Open();
-                using (var command = new NpgsqlCommand("DELETE FROM Companies WHERE company_id = @company_id", connection))
+                using (var transaction = connection.BeginTransaction())
                 {
-                    command.Parameters.AddWithValue("company_id", companyId);
-                    command.ExecuteNonQuery();
+                    try
+                    {
+                        // Получаем информацию о компании перед удалением
+                        var company = GetCompanyById(companyId);
+                        if (company != null)
+                        {
+                            // Записываем в журнал
+                            AddChangeLog("Companies", companyId, "DELETE", company.Name, null, null);
+                        }
+
+                        using (var command = new NpgsqlCommand("DELETE FROM Companies WHERE company_id = @company_id", 
+                            connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("company_id", companyId);
+                            command.ExecuteNonQuery();
+                        }
+
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
                 }
             }
         }
@@ -492,6 +559,48 @@ namespace ESG.Data
                 }
             }
             return summaries;
+        }
+
+        /// <summary>
+        /// Получение ID текущего пользователя
+        /// </summary>
+        private int? GetCurrentUserId()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(CurrentUser.Username))
+                {
+                    MessageBox.Show("Пользователь не авторизован", "Ошибка", 
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    return null;
+                }
+
+                using (var connection = new NpgsqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    // Получаем ID текущего авторизованного пользователя
+                    using (var command = new NpgsqlCommand(
+                        "SELECT user_id FROM Users WHERE username = @username", connection))
+                    {
+                        command.Parameters.AddWithValue("username", CurrentUser.Username);
+                        var result = command.ExecuteScalar();
+                        if (result != null)
+                        {
+                            return (int)result;
+                        }
+
+                        MessageBox.Show($"Пользователь {CurrentUser.Username} не найден в базе данных", 
+                            "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при получении ID пользователя: {ex.Message}", "Ошибка", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return null;
+            }
         }
 
         #endregion
@@ -1304,36 +1413,232 @@ namespace ESG.Data
         /// </summary>
         /// <param name="companyId">Код компании</param>
         /// <param name="industries">Список отраслей компании</param>
-        private void UpdateCompanyIndustries(int companyId, List<string> industries)
+        private void UpdateCompanyIndustries(int companyId, List<string> industries, NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
-            using (var connection = new NpgsqlConnection(_connectionString))
+            using (var command = new NpgsqlCommand(
+                "DELETE FROM CompanyIndustry WHERE company_id = @companyId", connection, transaction))
             {
-                connection.Open();
+                command.Parameters.AddWithValue("companyId", companyId);
+                command.ExecuteNonQuery();
+            }
+            foreach (var industry in industries ?? new List<string>())
+            {
+                if (string.IsNullOrWhiteSpace(industry)) continue;
+                AddIndustryIfNotExists(industry);
+                int industryId = GetIndustryIdByName(industry);
+                if (industryId == -1) continue;
+
                 using (var command = new NpgsqlCommand(
-                    "DELETE FROM CompanyIndustry WHERE company_id = @companyId", connection))
+                    "INSERT INTO CompanyIndustry (company_id, industry_id) VALUES (@companyId, @industryId)", connection, transaction))
                 {
                     command.Parameters.AddWithValue("companyId", companyId);
+                    command.Parameters.AddWithValue("industryId", industryId);
                     command.ExecuteNonQuery();
-                }
-                foreach (var industry in industries ?? new List<string>())
-                {
-                    if (string.IsNullOrWhiteSpace(industry)) continue;
-                    AddIndustryIfNotExists(industry);
-                    int industryId = GetIndustryIdByName(industry);
-                    if (industryId == -1) continue;
-
-                    using (var command = new NpgsqlCommand(
-                        "INSERT INTO CompanyIndustry (company_id, industry_id) VALUES (@companyId, @industryId)", connection))
-                    {
-                        command.Parameters.AddWithValue("companyId", companyId);
-                        command.Parameters.AddWithValue("industryId", industryId);
-                        command.ExecuteNonQuery();
-                    }
                 }
             }
         }
 
         #endregion
+
+        /// <summary>
+        /// Создание таблицы для журнала изменений
+        /// </summary>
+        public void CreateChangeLogTable()
+        {
+            using (var connection = new NpgsqlConnection(_connectionString))
+            {
+                connection.Open();
+                using (var command = new NpgsqlCommand(@"
+                    CREATE TABLE IF NOT EXISTS changelog (
+                        log_id SERIAL PRIMARY KEY,
+                        entity_type VARCHAR(50) NOT NULL,
+                        entity_id INTEGER NOT NULL,
+                        action VARCHAR(50) NOT NULL,
+                        details TEXT,
+                        user_id INTEGER NOT NULL,
+                        changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+                    )", connection))
+                {
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private void AddChangeLog(string tableName, int recordId, string action, string oldValue, string newValue, string fieldName)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                if (!userId.HasValue) return;
+
+                string details;
+                if (action == "INSERT")
+                {
+                    details = $"Добавлена запись: {oldValue}";
+                }
+                else if (action == "DELETE")
+                {
+                    details = $"Удалена запись: {oldValue}";
+                }
+                else // UPDATE
+                {
+                    var russianFieldName = GetFieldNameInRussian(tableName, fieldName);
+                    details = $"Поле: {russianFieldName}\nСтарое значение: {oldValue}\nНовое значение: {newValue}";
+                }
+
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    conn.Open();
+                    using (var cmd = new NpgsqlCommand())
+                    {
+                        cmd.Connection = conn;
+                        cmd.CommandText = @"INSERT INTO changelog (entity_type, entity_id, action, details, user_id, changed_at) 
+                                          VALUES (@tableName, @recordId, @action, @details, @userId, @changedAt)";
+                        cmd.Parameters.AddWithValue("@tableName", tableName);
+                        cmd.Parameters.AddWithValue("@recordId", recordId);
+                        cmd.Parameters.AddWithValue("@action", action);
+                        cmd.Parameters.AddWithValue("@details", details);
+                        cmd.Parameters.AddWithValue("@userId", userId.Value);
+                        cmd.Parameters.AddWithValue("@changedAt", DateTime.Now);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при записи в журнал изменений: {ex.Message}", "Ошибка", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private string GetFieldNameInRussian(string tableName, string fieldName)
+        {
+            switch (tableName.ToLower())
+            {
+                case "companies":
+                    switch (fieldName.ToLower())
+                    {
+                        case "name": return "Название";
+                        case "description": return "Описание";
+                        case "website": return "Веб-сайт";
+                        case "country": return "Страна";
+                        case "city": return "Город";
+                        case "address": return "Адрес";
+                        case "phone": return "Телефон";
+                        case "email": return "Email";
+                        case "employees": return "Количество сотрудников";
+                        case "revenue": return "Выручка";
+                        case "founded": return "Дата основания";
+                        case "status": return "Статус";
+                        case "is_selected": return "Выбрано";
+                        default: return fieldName;
+                    }
+                case "reports":
+                    switch (fieldName.ToLower())
+                    {
+                        case "title": return "Название";
+                        case "description": return "Описание";
+                        case "url": return "Ссылка";
+                        case "date": return "Дата";
+                        case "company": return "Компания";
+                        case "type": return "Тип";
+                        case "year": return "Год";
+                        case "language": return "Язык";
+                        case "file_path": return "Путь к файлу";
+                        default: return fieldName;
+                    }
+                case "websites":
+                    switch (fieldName.ToLower())
+                    {
+                        case "url": return "Ссылка";
+                        case "description": return "Описание";
+                        case "company": return "Компания";
+                        case "type": return "Тип";
+                        case "last_updated": return "Последнее обновление";
+                        default: return fieldName;
+                    }
+                case "news":
+                    switch (fieldName.ToLower())
+                    {
+                        case "title": return "Заголовок";
+                        case "content": return "Содержание";
+                        case "url": return "Ссылка";
+                        case "date": return "Дата";
+                        case "company": return "Компания";
+                        case "source": return "Источник";
+                        default: return fieldName;
+                    }
+                case "industries":
+                    switch (fieldName.ToLower())
+                    {
+                        case "name": return "Название";
+                        case "description": return "Описание";
+                        default: return fieldName;
+                    }
+                default:
+                    return fieldName;
+            }
+        }
+
+        private string GetActionTypeInRussian(string actionType)
+        {
+            switch (actionType.ToLower())
+            {
+                case "insert": return "Добавление";
+                case "update": return "Изменение";
+                case "delete": return "Удаление";
+                default: return actionType;
+            }
+        }
+
+        public List<ChangeLog> GetChangeLog(string tableName)
+        {
+            var logs = new List<ChangeLog>();
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    conn.Open();
+                    using (var cmd = new NpgsqlCommand())
+                    {
+                        cmd.Connection = conn;
+                        cmd.CommandText = @"SELECT l.log_id, l.entity_type, l.entity_id, l.action, l.details, 
+                                          l.user_id, u.username, l.changed_at
+                                          FROM changelog l
+                                          LEFT JOIN users u ON l.user_id = u.user_id
+                                          WHERE l.entity_type = @tableName
+                                          ORDER BY l.changed_at DESC";
+                        cmd.Parameters.AddWithValue("@tableName", tableName);
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var log = new ChangeLog
+                                {
+                                    LogId = reader.GetInt32(0),
+                                    TableName = reader.GetString(1),
+                                    RecordId = reader.GetInt32(2),
+                                    ActionType = GetActionTypeInRussian(reader.GetString(3)),
+                                    Details = reader.IsDBNull(4) ? null : reader.GetString(4),
+                                    UserId = reader.GetInt32(5),
+                                    ChangedBy = reader.IsDBNull(6) ? "Неизвестный пользователь" : reader.GetString(6),
+                                    ChangedAt = reader.GetDateTime(7)
+                                };
+                                logs.Add(log);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при получении журнала изменений: {ex.Message}", "Ошибка", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            return logs;
+        }
     }
 
     /// <summary>

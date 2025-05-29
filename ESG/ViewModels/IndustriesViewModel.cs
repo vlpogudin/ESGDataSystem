@@ -7,6 +7,11 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using IndustryItem = ESG.Models.IndustryItem;
+using System.Drawing;
+using System.IO;
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
+using Microsoft.Win32;
 
 namespace ESG.ViewModels
 {
@@ -335,6 +340,104 @@ namespace ESG.ViewModels
         protected void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        public void ExportChangeLog()
+        {
+            try
+            {
+                var saveFileDialog = new SaveFileDialog
+                {
+                    Filter = "Excel files (*.xlsx)|*.xlsx",
+                    Title = "Сохранить журнал изменений",
+                    FileName = $"Отрасли_Журнал_изменений_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx"
+                };
+
+                if (saveFileDialog.ShowDialog() == true)
+                {
+                    var logs = _dbService.GetChangeLog("Industries");
+                    using (var package = new ExcelPackage())
+                    {
+                        var worksheet = package.Workbook.Worksheets.Add("Журнал изменений");
+
+                        // Заголовки
+                        worksheet.Cells[1, 1].Value = "Дата изменения";
+                        worksheet.Cells[1, 2].Value = "Пользователь";
+                        worksheet.Cells[1, 3].Value = "Тип действия";
+                        worksheet.Cells[1, 4].Value = "ID записи";
+                        worksheet.Cells[1, 5].Value = "Поле";
+                        worksheet.Cells[1, 6].Value = "Старое значение";
+                        worksheet.Cells[1, 7].Value = "Новое значение";
+
+                        // Стиль заголовков
+                        using (var range = worksheet.Cells[1, 1, 1, 7])
+                        {
+                            range.Style.Font.Bold = true;
+                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                            range.Style.Fill.BackgroundColor.SetColor(Color.LightGray);
+                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                        }
+
+                        // Данные
+                        int row = 2;
+                        foreach (var log in logs)
+                        {
+                            worksheet.Cells[row, 1].Value = log.FormattedChangedAt;
+                            worksheet.Cells[row, 2].Value = log.ChangedBy;
+                            worksheet.Cells[row, 3].Value = log.ActionType;
+                            worksheet.Cells[row, 4].Value = log.RecordId;
+
+                            // Парсим детали для получения полей
+                            if (!string.IsNullOrEmpty(log.Details))
+                            {
+                                var lines = log.Details.Split('\n');
+                                foreach (var line in lines)
+                                {
+                                    if (line.StartsWith("Поле:"))
+                                    {
+                                        worksheet.Cells[row, 5].Value = line.Replace("Поле:", "").Trim();
+                                    }
+                                    else if (line.StartsWith("Старое значение:"))
+                                    {
+                                        worksheet.Cells[row, 6].Value = line.Replace("Старое значение:", "").Trim();
+                                    }
+                                    else if (line.StartsWith("Новое значение:"))
+                                    {
+                                        worksheet.Cells[row, 7].Value = line.Replace("Новое значение:", "").Trim();
+                                    }
+                                }
+                            }
+
+                            // Стиль строк
+                            using (var range = worksheet.Cells[row, 1, row, 7])
+                            {
+                                range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                            }
+                            row++;
+                        }
+
+                        // Автоматическая ширина столбцов
+                        worksheet.Cells.AutoFitColumns();
+
+                        // Сохранение файла
+                        package.SaveAs(new FileInfo(saveFileDialog.FileName));
+                    }
+
+                    MessageBox.Show("Журнал изменений успешно экспортирован", "Успех", 
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при экспорте журнала изменений: {ex.Message}", "Ошибка", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         #endregion

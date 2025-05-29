@@ -14,6 +14,7 @@ using iTextSharp.text;
 using iTextSharp.text.pdf;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace ESG.ViewModels
 {
@@ -837,7 +838,7 @@ namespace ESG.ViewModels
                     string reportsFolder = Path.Combine(exportFolder, "Reports");
                     Directory.CreateDirectory(reportsFolder);
 
-                    // Перемещаем Excel файл в папку выгрузки
+                    // Путь для сохранения Excel файла
                     string excelFilePath = Path.Combine(exportFolder, Path.GetFileName(saveFileDialog.FileName));
 
                     using (var package = new ExcelPackage())
@@ -875,11 +876,20 @@ namespace ESG.ViewModels
                         foreach (var summary in FilteredSummaries)
                         {
                             worksheet.Cells[row, 1].Value = summary.CompanyName;
-                            worksheet.Cells[row, 2].Value = string.Join(", ", summary.Industries);
-                            worksheet.Cells[row, 3].Value = summary.ReportFiles;
-                            worksheet.Cells[row, 4].Value = summary.ReportInfo;
-                            worksheet.Cells[row, 5].Value = summary.NewsTitles;
-                            worksheet.Cells[row, 6].Value = summary.NewsInfo;
+                            worksheet.Cells[row, 2].Value = string.Join(", ", summary.Industries?.Split(", ").Distinct() ?? new string[] { });
+                            
+                            // Форматируем отчеты и их информацию с разделителем ;
+                            var reports = summary.ReportFiles?.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries) ?? new string[] { };
+                            var reportInfo = summary.ReportInfo?.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries) ?? new string[] { };
+                            worksheet.Cells[row, 3].Value = string.Join(";\n", reports);
+                            worksheet.Cells[row, 4].Value = string.Join(";\n", reportInfo);
+
+                            // Форматируем новости и их информацию с разделителем ;
+                            var news = summary.NewsTitles?.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries) ?? new string[] { };
+                            var newsInfo = summary.NewsInfo?.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries) ?? new string[] { };
+                            worksheet.Cells[row, 5].Value = string.Join(";\n", news);
+                            worksheet.Cells[row, 6].Value = string.Join(";\n", newsInfo);
+
                             worksheet.Cells[row, 7].Value = summary.WebsiteUrls;
                             worksheet.Cells[row, 8].Value = summary.WebsiteInfo;
                             worksheet.Cells[row, 9].Value = StartYear?.ToString() ?? "N/A";
@@ -892,12 +902,31 @@ namespace ESG.ViewModels
                                 range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
                                 range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
                                 range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                                range.Style.WrapText = true; // Включаем перенос текста
                             }
                             row++;
                         }
 
-                        // Автоматическая ширина столбцов
-                        worksheet.Cells.AutoFitColumns();
+                        // Устанавливаем ширину столбцов для основного листа
+                        worksheet.Column(1).Width = 40; // Компания
+                        worksheet.Column(2).Width = 35; // Отрасли
+                        worksheet.Column(3).Width = 60; // Отчеты
+                        worksheet.Column(4).Width = 60; // Информация об отчетах
+                        worksheet.Column(5).Width = 60; // Новости
+                        worksheet.Column(6).Width = 60; // Информация о новостях
+                        worksheet.Column(7).Width = 60; // Веб-сайты
+                        worksheet.Column(8).Width = 60; // Информация о веб-сайтах
+                        worksheet.Column(9).Width = 15; // Период с
+                        worksheet.Column(10).Width = 15; // Период по
+
+                        // Устанавливаем высоту строк для основного листа
+                        for (int i = 2; i < row; i++)
+                        {
+                            worksheet.Row(i).Height = 60; // Уменьшаем высоту строк
+                        }
+
+                        // Добавляем фильтры для заголовков
+                        worksheet.Cells[1, 1, 1, 10].AutoFilter = true;
 
                         // Лист с отчетами
                         var reportsSheet = package.Workbook.Worksheets.Add("Отчеты");
@@ -907,7 +936,19 @@ namespace ESG.ViewModels
                         reportsSheet.Cells[1, 4].Value = "Язык";
                         reportsSheet.Cells[1, 5].Value = "Путь к файлу";
 
+                        // Устанавливаем ширину столбцов для листа отчетов
+                        reportsSheet.Column(1).Width = 40; // Компания
+                        reportsSheet.Column(2).Width = 60; // Название отчета
+                        reportsSheet.Column(3).Width = 15; // Год
+                        reportsSheet.Column(4).Width = 20; // Язык
+                        reportsSheet.Column(5).Width = 60; // Путь к файлу
+
+                        // Добавляем фильтры для заголовков отчетов
+                        reportsSheet.Cells[1, 1, 1, 5].AutoFilter = true;
+
                         int reportRow = 2;
+                        var processedReports = new HashSet<int>(); // Для отслеживания уже добавленных отчетов
+
                         foreach (var summary in FilteredSummaries)
                         {
                             // Получаем отчеты только для текущей компании
@@ -917,27 +958,34 @@ namespace ESG.ViewModels
 
                             if (companyReports.Any())
                             {
-                                // Создаем папку для компании только если у нее есть отчеты
-                                string companyFolder = Path.Combine(reportsFolder, summary.CompanyName);
+                                string sanitizedCompanyName = SanitizeFileName(summary.CompanyName);
+                                string companyFolder = Path.Combine(reportsFolder, sanitizedCompanyName);
                                 Directory.CreateDirectory(companyFolder);
 
                                 foreach (var report in companyReports)
                                 {
-                                    reportsSheet.Cells[reportRow, 1].Value = summary.CompanyName;
-                                    reportsSheet.Cells[reportRow, 2].Value = report.Title;
-                                    reportsSheet.Cells[reportRow, 3].Value = report.Year?.ToString() ?? "N/A";
-                                    reportsSheet.Cells[reportRow, 4].Value = report.Language;
-                                    reportsSheet.Cells[reportRow, 5].Value = report.FilePath;
-
-                                    // Копируем файл отчета в папку компании с оригинальным именем
-                                    if (!string.IsNullOrEmpty(report.FilePath) && File.Exists(report.FilePath))
+                                    // Проверяем, не добавляли ли мы уже этот отчет
+                                    if (!processedReports.Contains(report.ReportId))
                                     {
-                                        string fileName = Path.GetFileName(report.FilePath);
-                                        string destPath = Path.Combine(companyFolder, fileName);
-                                        File.Copy(report.FilePath, destPath, true);
-                                    }
+                                        processedReports.Add(report.ReportId);
 
-                                    reportRow++;
+                                        reportsSheet.Cells[reportRow, 1].Value = summary.CompanyName;
+                                        reportsSheet.Cells[reportRow, 2].Value = report.Title;
+                                        reportsSheet.Cells[reportRow, 3].Value = report.Year?.ToString() ?? "N/A";
+                                        reportsSheet.Cells[reportRow, 4].Value = report.Language;
+                                        reportsSheet.Cells[reportRow, 5].Value = report.FilePath;
+
+                                        // Копируем файл отчета в папку компании
+                                        if (!string.IsNullOrEmpty(report.FilePath) && File.Exists(report.FilePath))
+                                        {
+                                            string fileName = Path.GetFileName(report.FilePath);
+                                            string sanitizedFileName = SanitizeFileName(fileName);
+                                            string destPath = Path.Combine(companyFolder, sanitizedFileName);
+                                            File.Copy(report.FilePath, destPath, true);
+                                        }
+
+                                        reportRow++;
+                                    }
                                 }
                             }
                         }
@@ -955,7 +1003,7 @@ namespace ESG.ViewModels
                             range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
                         }
 
-                        // Добавляем границы для всех строк в листе отчетов
+                        // Добавляем границы и перенос текста для всех строк в листе отчетов
                         for (int i = 2; i < reportRow; i++)
                         {
                             using (var range = reportsSheet.Cells[i, 1, i, 5])
@@ -964,49 +1012,9 @@ namespace ESG.ViewModels
                                 range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
                                 range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
                                 range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                                range.Style.WrapText = true;
                             }
-                        }
-
-                        // Лист с отраслями
-                        var industriesSheet = package.Workbook.Worksheets.Add("Отрасли");
-                        industriesSheet.Cells[1, 1].Value = "Отрасль";
-                        industriesSheet.Cells[1, 2].Value = "Количество компаний";
-                        
-                        var industries = FilteredSummaries
-                            .SelectMany(s => s.Industries?.Split(", ") ?? new string[] { })
-                            .GroupBy(i => i)
-                            .Select(g => new { Industry = g.Key, Count = g.Count() })
-                            .OrderByDescending(x => x.Count)
-                            .ToList();
-
-                        int industryRow = 2;
-                        foreach (var industry in industries)
-                        {
-                            industriesSheet.Cells[industryRow, 1].Value = industry.Industry;
-                            industriesSheet.Cells[industryRow, 2].Value = industry.Count;
-
-                            // Добавляем границы для каждой строки
-                            using (var range = industriesSheet.Cells[industryRow, 1, industryRow, 2])
-                            {
-                                range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
-                                range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
-                                range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
-                                range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
-                            }
-                            industryRow++;
-                        }
-
-                        // Стилизация листа отраслей
-                        using (var range = industriesSheet.Cells[1, 1, 1, 2])
-                        {
-                            range.Style.Font.Bold = true;
-                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                            range.Style.Fill.BackgroundColor.SetColor(Color.LightGreen);
-                            range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
-                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
-                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
-                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                            reportsSheet.Row(i).Height = 30;
                         }
 
                         // Лист с веб-сайтами
@@ -1015,29 +1023,55 @@ namespace ESG.ViewModels
                         websitesSheet.Cells[1, 2].Value = "URL";
                         websitesSheet.Cells[1, 3].Value = "Описание";
 
+                        // Устанавливаем ширину столбцов для листа веб-сайтов
+                        websitesSheet.Column(1).Width = 40; // Компания
+                        websitesSheet.Column(2).Width = 60; // URL
+                        websitesSheet.Column(3).Width = 60; // Описание
+
+                        // Добавляем фильтры для заголовков веб-сайтов
+                        websitesSheet.Cells[1, 1, 1, 3].AutoFilter = true;
+
                         int websiteRow = 2;
+                        var processedWebsites = new HashSet<string>(); // Для отслеживания уже добавленных веб-сайтов
+
                         foreach (var summary in FilteredSummaries)
                         {
                             if (!string.IsNullOrEmpty(summary.WebsiteUrls))
                             {
-                                var urls = summary.WebsiteUrls.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries);
-                                var infos = summary.WebsiteInfo?.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries) ?? new string[0];
+                                // Разбиваем строки по символу ";"
+                                var urls = summary.WebsiteUrls.Split(new[] { ";" }, StringSplitOptions.RemoveEmptyEntries)
+                                    .Select(u => u.Trim())
+                                    .Where(u => !string.IsNullOrWhiteSpace(u))
+                                    .ToList();
+                                
+                                var infos = summary.WebsiteInfo?.Split(new[] { ";" }, StringSplitOptions.RemoveEmptyEntries)
+                                    .Select(i => i.Trim())
+                                    .Where(i => !string.IsNullOrWhiteSpace(i))
+                                    .ToList() ?? new List<string>();
 
-                                for (int i = 0; i < urls.Length; i++)
+                                for (int i = 0; i < urls.Count; i++)
                                 {
-                                    websitesSheet.Cells[websiteRow, 1].Value = summary.CompanyName;
-                                    websitesSheet.Cells[websiteRow, 2].Value = urls[i];
-                                    websitesSheet.Cells[websiteRow, 3].Value = i < infos.Length ? infos[i] : "";
-
-                                    // Добавляем границы для каждой строки
-                                    using (var range = websitesSheet.Cells[websiteRow, 1, websiteRow, 3])
+                                    string url = urls[i];
+                                    // Проверяем, не добавляли ли мы уже этот веб-сайт
+                                    if (!processedWebsites.Contains(url))
                                     {
-                                        range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
-                                        range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
-                                        range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
-                                        range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                                        processedWebsites.Add(url);
+
+                                        websitesSheet.Cells[websiteRow, 1].Value = summary.CompanyName;
+                                        websitesSheet.Cells[websiteRow, 2].Value = url;
+                                        websitesSheet.Cells[websiteRow, 3].Value = i < infos.Count ? infos[i] : "";
+
+                                        // Добавляем границы и перенос текста для каждой строки
+                                        using (var range = websitesSheet.Cells[websiteRow, 1, websiteRow, 3])
+                                        {
+                                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                                            range.Style.WrapText = true;
+                                        }
+                                        websiteRow++;
                                     }
-                                    websiteRow++;
                                 }
                             }
                         }
@@ -1055,35 +1089,67 @@ namespace ESG.ViewModels
                             range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
                         }
 
+                        // Устанавливаем высоту строк для листа веб-сайтов
+                        for (int i = 2; i < websiteRow; i++)
+                        {
+                            websitesSheet.Row(i).Height = 30;
+                        }
+
                         // Лист с новостями
                         var newsSheet = package.Workbook.Worksheets.Add("Новости");
                         newsSheet.Cells[1, 1].Value = "Компания";
                         newsSheet.Cells[1, 2].Value = "Заголовок";
                         newsSheet.Cells[1, 3].Value = "Информация";
 
+                        // Устанавливаем ширину столбцов для листа новостей
+                        newsSheet.Column(1).Width = 40; // Компания
+                        newsSheet.Column(2).Width = 60; // Заголовок
+                        newsSheet.Column(3).Width = 60; // Информация
+
+                        // Добавляем фильтры для заголовков новостей
+                        newsSheet.Cells[1, 1, 1, 3].AutoFilter = true;
+
                         int newsRow = 2;
+                        var processedNews = new HashSet<string>(); // Для отслеживания уже добавленных новостей
+
                         foreach (var summary in FilteredSummaries)
                         {
                             if (!string.IsNullOrEmpty(summary.NewsTitles))
                             {
-                                var titles = summary.NewsTitles.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries);
-                                var infos = summary.NewsInfo?.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries) ?? new string[0];
+                                // Разбиваем строки по символу ";"
+                                var titles = summary.NewsTitles.Split(new[] { ";" }, StringSplitOptions.RemoveEmptyEntries)
+                                    .Select(t => t.Trim())
+                                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                                    .ToList();
+                                
+                                var infos = summary.NewsInfo?.Split(new[] { ";" }, StringSplitOptions.RemoveEmptyEntries)
+                                    .Select(i => i.Trim())
+                                    .Where(i => !string.IsNullOrWhiteSpace(i))
+                                    .ToList() ?? new List<string>();
 
-                                for (int i = 0; i < titles.Length; i++)
+                                for (int i = 0; i < titles.Count; i++)
                                 {
-                                    newsSheet.Cells[newsRow, 1].Value = summary.CompanyName;
-                                    newsSheet.Cells[newsRow, 2].Value = titles[i];
-                                    newsSheet.Cells[newsRow, 3].Value = i < infos.Length ? infos[i] : "";
-
-                                    // Добавляем границы для каждой строки
-                                    using (var range = newsSheet.Cells[newsRow, 1, newsRow, 3])
+                                    string title = titles[i];
+                                    // Проверяем, не добавляли ли мы уже эту новость
+                                    if (!processedNews.Contains(title))
                                     {
-                                        range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
-                                        range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
-                                        range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
-                                        range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                                        processedNews.Add(title);
+
+                                        newsSheet.Cells[newsRow, 1].Value = summary.CompanyName;
+                                        newsSheet.Cells[newsRow, 2].Value = title;
+                                        newsSheet.Cells[newsRow, 3].Value = i < infos.Count ? infos[i] : "";
+
+                                        // Добавляем границы и перенос текста для каждой строки
+                                        using (var range = newsSheet.Cells[newsRow, 1, newsRow, 3])
+                                        {
+                                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                                            range.Style.WrapText = true;
+                                        }
+                                        newsRow++;
                                     }
-                                    newsRow++;
                                 }
                             }
                         }
@@ -1099,6 +1165,12 @@ namespace ESG.ViewModels
                             range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
                             range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
                             range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                        }
+
+                        // Устанавливаем высоту строк для листа новостей
+                        for (int i = 2; i < newsRow; i++)
+                        {
+                            newsSheet.Row(i).Height = 30;
                         }
 
                         // Сводный лист
@@ -1124,13 +1196,11 @@ namespace ESG.ViewModels
                         summarySheet.Cells[5, 1].Value = "Всего отраслей:";
                         summarySheet.Cells[5, 2].Value = SelectedIndustries.Count;
                         summarySheet.Cells[6, 1].Value = "Всего веб-сайтов:";
-                        summarySheet.Cells[6, 2].Value = FilteredSummaries.Sum(s => s.WebsiteUrls?.Split(',').Length ?? 0);
+                        summarySheet.Cells[6, 2].Value = websiteRow - 2; // Используем реальное количество веб-сайтов
                         summarySheet.Cells[7, 1].Value = "Всего новостей:";
-                        summarySheet.Cells[7, 2].Value = FilteredSummaries.Sum(s => s.NewsTitles?.Split(',').Length ?? 0);
+                        summarySheet.Cells[7, 2].Value = newsRow - 2; // Используем реальное количество новостей
                         summarySheet.Cells[8, 1].Value = "Всего отчетов:";
-                        summarySheet.Cells[8, 2].Value = FilteredSummaries.Sum(s => 
-                            _dbService.GetReports(null, null, s.CompanyId, null)
-                                .Count(r => r.CompanyId == s.CompanyId));
+                        summarySheet.Cells[8, 2].Value = reportRow - 2; // Используем реальное количество отчетов
 
                         // Стилизация статистики
                         using (var range = summarySheet.Cells[3, 1, 8, 2])
@@ -1144,14 +1214,71 @@ namespace ESG.ViewModels
                             range.Style.Fill.BackgroundColor.SetColor(Color.White);
                         }
 
-                        // Автоматическая ширина столбцов для всех листов
-                        foreach (var sheet in package.Workbook.Worksheets)
+                        // Устанавливаем ширину столбцов для сводного листа
+                        summarySheet.Column(1).Width = 30;
+                        summarySheet.Column(2).Width = 30;
+
+                        // Устанавливаем высоту строк для сводного листа
+                        for (int i = 1; i <= 8; i++)
                         {
-                            sheet.Cells.AutoFitColumns();
+                            summarySheet.Row(i).Height = 30;
                         }
 
+                        // Устанавливаем порядок листов
+                        package.Workbook.Worksheets.MoveToStart("Основные данные");
+                        package.Workbook.Worksheets.MoveAfter("Отчеты", "Основные данные");
+                        package.Workbook.Worksheets.MoveAfter("Веб-сайты", "Отчеты");
+                        package.Workbook.Worksheets.MoveAfter("Новости", "Веб-сайты");
+                        package.Workbook.Worksheets.MoveAfter("Сводная информация", "Новости");
+
                         // Сохранение файла в папку выгрузки
-                        package.SaveAs(new FileInfo(excelFilePath));
+                        var fileInfo = new FileInfo(excelFilePath);
+                        package.SaveAs(fileInfo);
+
+                        // Проверяем, что файл действительно создался
+                        if (!File.Exists(excelFilePath))
+                        {
+                            throw new Exception("Не удалось создать Excel файл");
+                        }
+
+                        // Копируем отчеты
+                        foreach (var summary in FilteredSummaries)
+                        {
+                            var companyReports = _dbService.GetReports(null, null, summary.CompanyId, null)
+                                .Where(r => r.CompanyId == summary.CompanyId)
+                                .ToList();
+
+                            if (companyReports.Any())
+                            {
+                                string sanitizedCompanyName = SanitizeFileName(summary.CompanyName);
+                                string companyFolder = Path.Combine(reportsFolder, sanitizedCompanyName);
+                                Directory.CreateDirectory(companyFolder);
+
+                                foreach (var report in companyReports)
+                                {
+                                    if (!string.IsNullOrEmpty(report.FilePath) && File.Exists(report.FilePath))
+                                    {
+                                        try
+                                        {
+                                            string fileName = Path.GetFileName(report.FilePath);
+                                            string sanitizedFileName = SanitizeFileName(fileName);
+                                            string destPath = Path.Combine(companyFolder, sanitizedFileName);
+                                            File.Copy(report.FilePath, destPath, true);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Debug.WriteLine($"Ошибка при копировании файла {report.FilePath}: {ex.Message}");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Проверяем, что папка с отчетами не пустая
+                        if (!Directory.GetFiles(reportsFolder, "*.*", SearchOption.AllDirectories).Any())
+                        {
+                            Debug.WriteLine("Папка с отчетами пуста");
+                        }
                     }
 
                     MessageBox.Show($"Данные успешно выгружены!\nExcel файл и отчеты находятся в папке: {exportFolder}", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -1221,6 +1348,10 @@ namespace ESG.ViewModels
                         PdfPTable table = new PdfPTable(8); // 8 columns
                         table.WidthPercentage = 100;
 
+                        // Устанавливаем ширину столбцов
+                        float[] columnWidths = new float[] { 15f, 15f, 15f, 15f, 15f, 25f, 15f, 15f }; // Изменяем ширину столбцов
+                        table.SetWidths(columnWidths);
+
                         // Add headers
                         iTextSharp.text.Font headerFont = new iTextSharp.text.Font(baseFont, 10f, iTextSharp.text.Font.BOLD);
                         string[] headers = { "Компания", "Отрасли", "Отчеты", "Информация об отчетах", "Новости", "Информация о новостях", "Веб-сайты", "Информация о веб-сайтах" };
@@ -1269,6 +1400,26 @@ namespace ESG.ViewModels
                     MessageBox.Show($"Ошибка при выгрузке данных в PDF: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
+        }
+
+        private string SanitizeFileName(string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName)) return fileName;
+            
+            // Заменяем недопустимые символы на подчеркивание
+            char[] invalidChars = Path.GetInvalidFileNameChars();
+            foreach (char c in invalidChars)
+            {
+                fileName = fileName.Replace(c, '_');
+            }
+            
+            // Удаляем кавычки
+            fileName = fileName.Replace("\"", "").Replace("'", "");
+            
+            // Удаляем символы | и /
+            fileName = fileName.Replace("|", "_").Replace("/", "_");
+            
+            return fileName;
         }
 
         /// <summary>

@@ -204,16 +204,24 @@
             </ScrollViewer>
         </Border>
 
-        <!-- Кнопка выгрузки -->
-        <Button Grid.Row="4" Margin="0,0,10,0" HorizontalAlignment="Right"
-                Command="{Binding ExportToCsvCommand}" 
-                Style="{StaticResource PrimaryButton}">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <materialDesign:PackIcon Kind="Download" Width="18" Height="18" Margin="0,0,8,0"
-                                       VerticalAlignment="Center"/>
-                <TextBlock Text="Выгрузить в CSV" FontSize="14" Foreground="White"
-                         VerticalAlignment="Center" Margin="0,1,0,0"/>
-            </StackPanel>
-        </Button>
+        <!-- Кнопки экспорта -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
+            <TextBlock Text="Журнал изменений" 
+                     Foreground="#2196F3" 
+                     Margin="0,0,10,0" 
+                     Cursor="Hand"
+                     VerticalAlignment="Bottom"
+                     MouseLeftButtonDown="ChangeLog_Click"/>
+            <Button Margin="0,0,10,0" HorizontalAlignment="Right"
+                    Command="{Binding ExportToCsvCommand}" 
+                    Style="{StaticResource PrimaryButton}">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <materialDesign:PackIcon Kind="Download" Width="18" Height="18" Margin="0,0,8,0"
+                                           VerticalAlignment="Center"/>
+                    <TextBlock Text="Выгрузить в CSV" FontSize="14" Foreground="White"
+                             VerticalAlignment="Center" Margin="0,1,0,0"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
     </Grid>
 </Page>

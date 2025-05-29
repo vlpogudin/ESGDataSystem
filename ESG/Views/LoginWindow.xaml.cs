@@ -35,6 +35,12 @@ namespace ESG.Views
             {
                 AuthenticatedUser = user;
                 RoleName = roleName;
+                
+                // Устанавливаем значения в CurrentUser
+                CurrentUser.Username = user.Username;
+                CurrentUser.UserId = user.UserId;
+                CurrentUser.RoleName = roleName;
+                
                 DialogResult = true; // Устанавливаем результат диалога как успешный
                 Close(); // Закрываем окно
             }

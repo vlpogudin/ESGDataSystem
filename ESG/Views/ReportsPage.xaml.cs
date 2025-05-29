@@ -2,6 +2,7 @@
 using ESG.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace ESG.Views
 {
@@ -72,6 +73,12 @@ namespace ESG.Views
                     viewModel.UpdateFilteredReports();
                 }
             }
+        }
+
+        private void ChangeLog_Click(object sender, MouseButtonEventArgs e)
+        {
+            var viewModel = (ReportsViewModel)DataContext;
+            viewModel.ExportChangeLog();
         }
     }
 }

@@ -2,6 +2,7 @@
 using ESG.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace ESG.Views
 {
@@ -41,6 +42,12 @@ namespace ESG.Views
                     viewModel.UpdateFilteredIndustries();
                 }
             }
+        }
+
+        private void ChangeLog_Click(object sender, MouseButtonEventArgs e)
+        {
+            var viewModel = (IndustriesViewModel)DataContext;
+            viewModel.ExportChangeLog();
         }
     }
 }

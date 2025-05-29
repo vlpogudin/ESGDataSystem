@@ -10,6 +10,9 @@ using System.Windows.Input;
 using Microsoft.Win32;
 using ESG.Utilities;
 using System.IO;
+using System.Drawing;
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
 
 namespace ESG.ViewModels
 {
@@ -31,21 +34,31 @@ namespace ESG.ViewModels
         public ReportsViewModel()
         {
             _dbService = new DatabaseService();
-            _allReports = new ObservableCollection<Report>(_dbService.GetReports(null, null, null, null));
-            _allCompanies = new ObservableCollection<Company>(_dbService.GetCompanies());
+            
+            // Получаем отчеты и компании из базы данных
+            var reports = _dbService.GetReports(null, null, null, null);
+            var companies = _dbService.GetCompanies();
 
-            foreach (var report in _allReports)
+            // Инициализируем коллекции
+            _allReports = new ObservableCollection<Report>();
+            _allCompanies = new ObservableCollection<Company>(companies);
+
+            // Добавляем отчеты по одному, устанавливая имена компаний
+            foreach (var report in reports)
             {
                 report.CompanyName = _dbService.GetCompanyNameById(report.CompanyId) ?? "Неизвестная компания";
+                _allReports.Add(report);
             }
 
+            // Инициализируем остальные коллекции
             AvailableReports = new ObservableCollection<Report>(_allReports);
-            FilteredForList = new ObservableCollection<Report>(AvailableReports);
-            FilteredReports = new ObservableCollection<Report>(AvailableReports);
+            FilteredForList = new ObservableCollection<Report>(_allReports);
+            FilteredReports = new ObservableCollection<Report>(_allReports);
             SelectedReports = new ObservableCollection<Report>();
             FilteredCompaniesForList = new ObservableCollection<Company>(_allCompanies);
             SelectedCompanies = new ObservableCollection<Company>();
 
+            // Инициализируем команды
             AddCommand = new RelayCommand(_ => AddReport(), _ => CanPerformCrud);
             EditCommand = new RelayCommand(_ => EditReport(), _ => CanPerformCrud && SelectedReport != null);
             DeleteCommand = new RelayCommand(_ => DeleteReport(), _ => CanPerformCrud && SelectedReport != null);
@@ -53,9 +66,12 @@ namespace ESG.ViewModels
             ExportToCsvCommand = new RelayCommand(_ => ExportToCsv());
             ClearCompanySelectionCommand = new RelayCommand(_ => ClearCompanySelection());
             ClearReportSelectionCommand = new RelayCommand(_ => ClearReportSelection());
+
+            // Инициализируем тексты поиска
             ReportSearchText = string.Empty;
             CompanySearchText = string.Empty;
 
+            // Подписываемся на события изменения коллекций
             SelectedCompanies.CollectionChanged += (s, e) => UpdateFilteredReports();
             SelectedReports.CollectionChanged += (s, e) => UpdateTableReports();
         }
@@ -211,26 +227,33 @@ namespace ESG.ViewModels
 
         private void UpdateTableReports()
         {
-            var filtered = AvailableReports.AsEnumerable();
+            // Создаем новый список для отфильтрованных отчетов
+            var filtered = new List<Report>();
 
-            if (SelectedCompanies.Any())
+            // Добавляем отчеты из AvailableReports, которые соответствуют фильтрам
+            foreach (var report in AvailableReports)
             {
-                filtered = filtered.Where(r => SelectedCompanies.Any(c => c.CompanyId == r.CompanyId));
+                bool matchesCompanyFilter = !SelectedCompanies.Any() || 
+                    SelectedCompanies.Any(c => c.CompanyId == report.CompanyId);
+                
+                bool matchesReportFilter = !SelectedReports.Any() || 
+                    SelectedReports.Contains(report);
+                
+                bool matchesSearchFilter = string.IsNullOrWhiteSpace(ReportSearchText) ||
+                    (report.Title?.ToLower().Contains(ReportSearchText.ToLower()) == true) ||
+                    (report.CompanyName?.ToLower().Contains(ReportSearchText.ToLower()) == true);
+
+                // Проверяем, не добавлен ли уже этот отчет в отфильтрованный список
+                bool isAlreadyAdded = filtered.Any(r => r.ReportId == report.ReportId);
+
+                if (matchesCompanyFilter && matchesReportFilter && matchesSearchFilter && !isAlreadyAdded)
+                {
+                    filtered.Add(report);
+                }
             }
 
-            if (SelectedReports.Any())
-            {
-                filtered = filtered.Where(r => SelectedReports.Contains(r));
-            }
-
-            if (!string.IsNullOrWhiteSpace(ReportSearchText))
-            {
-                filtered = filtered
-                    .Where(r => r.Title.ToLower().Contains(ReportSearchText.ToLower()) ||
-                                r.CompanyName.ToLower().Contains(ReportSearchText.ToLower()));
-            }
-
-            FilteredReports = new ObservableCollection<Report>(filtered.ToList());
+            // Обновляем FilteredReports
+            FilteredReports = new ObservableCollection<Report>(filtered);
             OnPropertyChanged(nameof(FilteredReports));
         }
 
@@ -249,13 +272,28 @@ namespace ESG.ViewModels
                 var newReport = window.Report;
                 _dbService.AddReport(newReport);
 
-                _allReports = new ObservableCollection<Report>(_dbService.GetReports(null, null, null, null));
-                foreach (var report in _allReports)
+                // Получаем обновленный список отчетов
+                var updatedReports = _dbService.GetReports(null, null, null, null);
+                
+                // Очищаем и обновляем все коллекции
+                _allReports.Clear();
+                foreach (var report in updatedReports)
                 {
                     report.CompanyName = _dbService.GetCompanyNameById(report.CompanyId) ?? "Неизвестная компания";
+                    _allReports.Add(report);
                 }
-                AvailableReports = new ObservableCollection<Report>(_allReports);
+
+                // Обновляем AvailableReports
+                AvailableReports.Clear();
+                foreach (var report in _allReports)
+                {
+                    AvailableReports.Add(report);
+                }
+
+                // Обновляем фильтры
                 UpdateFilteredReports();
+
+                // Выбираем новый отчет
                 SelectedReport = _allReports.FirstOrDefault(r => r.ReportId == newReport.ReportId);
             }
         }
@@ -379,6 +417,104 @@ namespace ESG.ViewModels
                 SelectedReports.Remove(report);
             }
             UpdateTableReports();
+        }
+
+        public void ExportChangeLog()
+        {
+            try
+            {
+                var saveFileDialog = new SaveFileDialog
+                {
+                    Filter = "Excel files (*.xlsx)|*.xlsx",
+                    Title = "Сохранить журнал изменений",
+                    FileName = $"Отчеты_Журнал_изменений_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx"
+                };
+
+                if (saveFileDialog.ShowDialog() == true)
+                {
+                    var logs = _dbService.GetChangeLog("Reports");
+                    using (var package = new ExcelPackage())
+                    {
+                        var worksheet = package.Workbook.Worksheets.Add("Журнал изменений");
+
+                        // Заголовки
+                        worksheet.Cells[1, 1].Value = "Дата изменения";
+                        worksheet.Cells[1, 2].Value = "Пользователь";
+                        worksheet.Cells[1, 3].Value = "Тип действия";
+                        worksheet.Cells[1, 4].Value = "ID записи";
+                        worksheet.Cells[1, 5].Value = "Поле";
+                        worksheet.Cells[1, 6].Value = "Старое значение";
+                        worksheet.Cells[1, 7].Value = "Новое значение";
+
+                        // Стиль заголовков
+                        using (var range = worksheet.Cells[1, 1, 1, 7])
+                        {
+                            range.Style.Font.Bold = true;
+                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                            range.Style.Fill.BackgroundColor.SetColor(Color.LightGray);
+                            range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                            range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                        }
+
+                        // Данные
+                        int row = 2;
+                        foreach (var log in logs)
+                        {
+                            worksheet.Cells[row, 1].Value = log.FormattedChangedAt;
+                            worksheet.Cells[row, 2].Value = log.ChangedBy;
+                            worksheet.Cells[row, 3].Value = log.ActionType;
+                            worksheet.Cells[row, 4].Value = log.RecordId;
+
+                            // Парсим детали для получения полей
+                            if (!string.IsNullOrEmpty(log.Details))
+                            {
+                                var lines = log.Details.Split('\n');
+                                foreach (var line in lines)
+                                {
+                                    if (line.StartsWith("Поле:"))
+                                    {
+                                        worksheet.Cells[row, 5].Value = line.Replace("Поле:", "").Trim();
+                                    }
+                                    else if (line.StartsWith("Старое значение:"))
+                                    {
+                                        worksheet.Cells[row, 6].Value = line.Replace("Старое значение:", "").Trim();
+                                    }
+                                    else if (line.StartsWith("Новое значение:"))
+                                    {
+                                        worksheet.Cells[row, 7].Value = line.Replace("Новое значение:", "").Trim();
+                                    }
+                                }
+                            }
+
+                            // Стиль строк
+                            using (var range = worksheet.Cells[row, 1, row, 7])
+                            {
+                                range.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                                range.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                            }
+                            row++;
+                        }
+
+                        // Автоматическая ширина столбцов
+                        worksheet.Cells.AutoFitColumns();
+
+                        // Сохранение файла
+                        package.SaveAs(new FileInfo(saveFileDialog.FileName));
+                    }
+
+                    MessageBox.Show("Журнал изменений успешно экспортирован", "Успех", 
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при экспорте журнала изменений: {ex.Message}", "Ошибка", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
