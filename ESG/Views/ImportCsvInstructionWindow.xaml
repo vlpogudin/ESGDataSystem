@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Загрузка веб-сайтов из CSV" SizeToContent="WidthAndHeight"
         MinHeight="300" MinWidth="400"
-        Background="#FFF5F5F5">
+        Background="#FFF5F5F5"
+        WindowStartupLocation="CenterScreen">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Grid Margin="15">
             <Grid.RowDefinitions>

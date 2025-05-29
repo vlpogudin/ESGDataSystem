@@ -160,6 +160,12 @@ namespace ESG.Views
             }
         }
 
+        private void ClearCompanySearch_Click(object sender, RoutedEventArgs e)
+        {
+            CompanySearchText = string.Empty;
+            UpdateFilteredCompanies();
+        }
+
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged(string propertyName)
         {

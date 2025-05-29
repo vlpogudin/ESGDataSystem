@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Редактировать отчет" SizeToContent="WidthAndHeight"
         MinHeight="400" MinWidth="450"
-        Background="#FFF5F5F5">
+        Background="#FFF5F5F5"
+        WindowStartupLocation="CenterScreen">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Grid Margin="15">
             <Grid.RowDefinitions>

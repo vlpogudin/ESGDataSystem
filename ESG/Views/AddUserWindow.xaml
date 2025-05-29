@@ -2,8 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Добавить пользователя" SizeToContent="WidthAndHeight"
-        MinHeight="300" MinWidth="400"
-        Background="#FFF5F5F5">
+        MinHeight="350" MinWidth="400"
+        Background="#FFF5F5F5"
+        WindowStartupLocation="CenterScreen">
     <Grid Margin="15">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

@@ -22,11 +22,11 @@
         <!-- Заголовок -->
         <TextBlock Grid.Row="0" Text="Управление пользователями" 
                    FontSize="24" FontWeight="SemiBold"
-                   Margin="0,0,0,20" Foreground="#222222"/>
+                   Margin="0,0,0,15" Foreground="#222222"/>
 
         <!-- Панель инструментов -->
         <Border Grid.Row="1" Background="White" CornerRadius="6" 
-                Padding="12" Margin="0,0,0,20"
+                Padding="12" Margin="0,0,0,15"
                 Effect="{StaticResource CardShadow}">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Command="{Binding AddUserCommand}" 
@@ -65,7 +65,7 @@
         </Border>
 
         <!-- Панель поиска -->
-        <Expander Grid.Row="2" Header="Фильтр по пользователям" IsExpanded="False" Margin="0,0,0,20">
+        <Expander Grid.Row="2" Header="Фильтр по пользователям" IsExpanded="False" Margin="0,0,0,15">
             <Border Background="White" CornerRadius="6" 
                     Padding="12" Margin="0"
                     Effect="{StaticResource CardShadow}">
